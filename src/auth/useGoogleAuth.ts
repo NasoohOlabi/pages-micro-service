@@ -81,8 +81,10 @@ async function fetchUserInfo(accessToken: string): Promise<GoogleUser> {
 export function useGoogleAuth(): UseGoogleAuthResult {
   const { t } = useLocale()
   const [ready, setReady] = useState(false)
-  const [user, setUser] = useState<GoogleUser | null>(null)
-  const [accessToken, setAccessToken] = useState<string | null>(null)
+  const [user, setUser] = useState<GoogleUser | null>(() => loadStoredAuth()?.user ?? null)
+  const [accessToken, setAccessToken] = useState<string | null>(
+    () => loadStoredAuth()?.accessToken ?? null,
+  )
   const [error, setError] = useState<string | null>(null)
   const tokenClientRef = useRef<ReturnType<
     Window['google']['accounts']['oauth2']['initTokenClient']
