@@ -38,6 +38,10 @@ export function isDuplicate(rows: string[][], values: SheetRowValues): boolean {
   return rows.some((row) => keyIndexes.every((idx, i) => normalize(row[idx]) === newKey[i]))
 }
 
+export function findDuplicatePages(rows: string[][], values: SheetRowValues[]): number[] {
+  return values.filter((value) => isDuplicate(rows, value)).map((value) => value.page)
+}
+
 export async function appendRows(rows: SheetRowValues[]): Promise<void> {
   await withAccessErrorHandling(() =>
     window.gapi.client.sheets.spreadsheets.values.append({
