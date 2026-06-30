@@ -1,26 +1,32 @@
 import { z } from 'zod'
+import type { TranslationKey } from '../i18n/translations'
 
-const pageNumber = z.coerce
-  .number()
-  .int('Page must be a whole number')
-  .min(1, 'Page must be between 1 and 604')
-  .max(604, 'Page must be between 1 and 604')
+type Translate = (key: TranslationKey) => string
 
-export const entrySchema = z
-  .object({
-    student: z.string().trim().min(1, 'Student is required'),
-    teacher: z.string().trim().min(1, 'Teacher is required'),
-    startPage: pageNumber,
-    endPage: pageNumber,
-    date: z.string().min(1, 'Date is required'),
-  })
-  .refine((values) => values.startPage <= values.endPage, {
-    message: 'Start page must be less than or equal to end page',
-    path: ['endPage'],
-  })
+export function createEntrySchema(t: Translate) {
+  const pageNumber = z.coerce
+    .number()
+    .int(t('pageMustBeWhole'))
+    .min(1, t('pageMustBeInRange'))
+    .max(604, t('pageMustBeInRange'))
 
-export type EntryFormInput = z.input<typeof entrySchema>
-export type EntryFormValues = z.output<typeof entrySchema>
+  return z
+    .object({
+      student: z.string().trim().min(1, t('studentRequired')),
+      teacher: z.string().trim().min(1, t('teacherRequired')),
+      startPage: pageNumber,
+      endPage: pageNumber,
+      date: z.string().min(1, t('dateRequired')),
+    })
+    .refine((values) => values.startPage <= values.endPage, {
+      message: t('startPageLessThanEnd'),
+      path: ['endPage'],
+    })
+}
+
+export type EntrySchema = ReturnType<typeof createEntrySchema>
+export type EntryFormInput = z.input<EntrySchema>
+export type EntryFormValues = z.output<EntrySchema>
 
 export interface SheetRowValues {
   student: string

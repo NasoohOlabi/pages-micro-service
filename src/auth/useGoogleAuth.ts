@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { config } from '../config'
+import { useLocale } from '../i18n/LocaleContext'
 
 const GIS_SRC = 'https://accounts.google.com/gsi/client'
 const GAPI_SRC = 'https://apis.google.com/js/api.js'
@@ -78,6 +79,7 @@ async function fetchUserInfo(accessToken: string): Promise<GoogleUser> {
 }
 
 export function useGoogleAuth(): UseGoogleAuthResult {
+  const { t } = useLocale()
   const [ready, setReady] = useState(false)
   const [user, setUser] = useState<GoogleUser | null>(null)
   const [accessToken, setAccessToken] = useState<string | null>(null)
@@ -110,7 +112,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
           scope: SCOPES,
           callback: async (response) => {
             if (response.error || !response.access_token) {
-              setError('Sign-in failed or was cancelled.')
+              setError(t('signInFailed'))
               return
             }
             window.gapi.client.setToken({ access_token: response.access_token })
@@ -122,7 +124,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
               saveStoredAuth({ accessToken: response.access_token, user: profile, expiresAt })
               scheduleRefresh(expiresAt)
             } catch {
-              setError('Signed in, but could not load your profile.')
+              setError(t('signedInProfileError'))
             }
           },
         })
@@ -142,7 +144,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
         }
       } catch {
         if (!cancelled) {
-          setError('Failed to load Google sign-in. Check your connection and try again.')
+          setError(t('googleLoadError'))
         }
       }
     }
@@ -152,6 +154,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
       cancelled = true
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleRefresh])
 
   const signIn = useCallback(() => {

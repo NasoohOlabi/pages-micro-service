@@ -1,9 +1,12 @@
+import { useLocale } from '../i18n/LocaleContext'
+
 interface SignInButtonProps {
   onClick: () => void
   disabled?: boolean
 }
 
 export function SignInButton({ onClick, disabled }: SignInButtonProps) {
+  const { t } = useLocale()
   return (
     <button
       type="button"
@@ -29,7 +32,7 @@ export function SignInButton({ onClick, disabled }: SignInButtonProps) {
           d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.6l6.5 5.4C40.9 36.6 44 30.9 44 24c0-1.3-.1-2.7-.4-3.5z"
         />
       </svg>
-      Sign in with Google
+      {t('signInWithGoogle')}
     </button>
   )
 }

@@ -3,6 +3,7 @@ import Fuse from 'fuse.js'
 import { fetchRosterNames } from '../sheets/rosterClient'
 import { SheetsAccessError } from '../sheets/sheetsClient'
 import { englishKeysToArabic } from '../utils/keymap'
+import { useLocale } from '../i18n/LocaleContext'
 
 interface StudentAutocompleteProps {
   id: string
@@ -13,6 +14,7 @@ interface StudentAutocompleteProps {
 
 export const StudentAutocomplete = forwardRef<HTMLInputElement, StudentAutocompleteProps>(
   function StudentAutocomplete({ id, value, onChange, onBlur }, forwardedRef) {
+    const { t } = useLocale()
     const [names, setNames] = useState<string[]>([])
     const [loadError, setLoadError] = useState<string | null>(null)
     const [isOpen, setIsOpen] = useState(false)
@@ -31,12 +33,13 @@ export const StudentAutocomplete = forwardRef<HTMLInputElement, StudentAutocompl
         .catch((err) => {
           if (cancelled) return
           setLoadError(
-            err instanceof SheetsAccessError ? err.message : 'Could not load the student roster.',
+            err instanceof SheetsAccessError ? err.message : t('rosterLoadError'),
           )
         })
       return () => {
         cancelled = true
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     useEffect(() => {
@@ -118,7 +121,7 @@ export const StudentAutocomplete = forwardRef<HTMLInputElement, StudentAutocompl
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => selectMatch(name)}
-                  className={`block w-full px-3 py-3 text-right ${
+                  className={`block w-full px-3 py-3 text-start ${
                     index === highlightedIndex ? 'bg-indigo-50' : 'hover:bg-gray-50'
                   }`}
                 >

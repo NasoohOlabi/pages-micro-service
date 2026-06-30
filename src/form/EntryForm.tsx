@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
-  entrySchema,
+  createEntrySchema,
   expandPageRange,
   type EntryFormInput,
   type EntryFormValues,
@@ -17,6 +17,7 @@ import { FIELDS } from './fields'
 import { StudentAutocomplete } from './StudentAutocomplete'
 import { TeacherSelect } from './TeacherSelect'
 import type { GoogleUser } from '../auth/useGoogleAuth'
+import { useLocale } from '../i18n/LocaleContext'
 
 interface EntryFormProps {
   user: GoogleUser
@@ -27,10 +28,13 @@ function today(): string {
 }
 
 export function EntryForm({ user }: EntryFormProps) {
+  const { t } = useLocale()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const studentInputRef = useRef<HTMLInputElement>(null)
   const teacherTouchedRef = useRef(false)
+
+  const entrySchema = useMemo(() => createEntrySchema(t), [t])
 
   const {
     register,
@@ -62,14 +66,18 @@ export function EntryForm({ user }: EntryFormProps) {
       const existingRows = await fetchExistingRows()
       const duplicateRow = rows.find((row) => isDuplicate(existingRows, row))
       if (duplicateRow) {
-        setSubmitError(`${values.student} already has page ${duplicateRow.page} logged.`)
+        setSubmitError(t('duplicatePage', { student: values.student, page: duplicateRow.page }))
         return
       }
       await appendRows(rows)
       setSuccessMessage(
         values.startPage === values.endPage
-          ? `Logged page ${values.startPage} for ${values.student}.`
-          : `Logged pages ${values.startPage}-${values.endPage} for ${values.student}.`,
+          ? t('loggedSinglePage', { page: values.startPage, student: values.student })
+          : t('loggedPageRange', {
+              start: values.startPage,
+              end: values.endPage,
+              student: values.student,
+            }),
       )
       reset({
         student: '',
@@ -81,9 +89,7 @@ export function EntryForm({ user }: EntryFormProps) {
       studentInputRef.current?.focus()
     } catch (err) {
       setSubmitError(
-        err instanceof SheetsAccessError
-          ? err.message
-          : 'Something went wrong saving this entry. Please try again.',
+        err instanceof SheetsAccessError ? err.message : t('saveError'),
       )
     }
   }
@@ -94,12 +100,12 @@ export function EntryForm({ user }: EntryFormProps) {
       className="mx-auto flex w-full max-w-md flex-col gap-4 p-6"
     >
       {FIELDS.filter((field) => field.name !== 'endPage').map((field) => (
-        <div key={field.name} className="flex flex-col gap-1 text-left">
+        <div key={field.name} className="flex flex-col gap-1 text-start">
           {field.name === 'startPage' ? (
             <div className="flex gap-3">
               <div className="flex flex-1 flex-col gap-1">
                 <label htmlFor="startPage" className="text-sm font-medium text-gray-700">
-                  Start page
+                  {t('startPageLabel')}
                 </label>
                 <input
                   id="startPage"
@@ -116,7 +122,7 @@ export function EntryForm({ user }: EntryFormProps) {
               </div>
               <div className="flex flex-1 flex-col gap-1">
                 <label htmlFor="endPage" className="text-sm font-medium text-gray-700">
-                  End page
+                  {t('endPageLabel')}
                 </label>
                 <input
                   id="endPage"
@@ -135,7 +141,7 @@ export function EntryForm({ user }: EntryFormProps) {
           ) : (
             <>
               <label htmlFor={field.name} className="text-sm font-medium text-gray-700">
-                {field.label}
+                {t(field.labelKey)}
               </label>
               {field.name === 'student' ? (
                 <Controller
@@ -196,7 +202,7 @@ export function EntryForm({ user }: EntryFormProps) {
         disabled={isSubmitting}
         className="min-h-11 rounded-md bg-indigo-600 px-4 py-3 text-base font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {isSubmitting ? 'Saving…' : 'Log page'}
+        {isSubmitting ? t('saving') : t('logPage')}
       </button>
     </form>
   )

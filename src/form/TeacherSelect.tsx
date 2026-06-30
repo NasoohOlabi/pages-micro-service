@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useState } from 'react'
 import { fetchTeachers, findTeacherByEmail, type Teacher } from '../sheets/teachersClient'
 import { SheetsAccessError } from '../sheets/sheetsClient'
+import { useLocale } from '../i18n/LocaleContext'
 
 interface TeacherSelectProps {
   id: string
@@ -13,6 +14,7 @@ interface TeacherSelectProps {
 
 export const TeacherSelect = forwardRef<HTMLSelectElement, TeacherSelectProps>(
   function TeacherSelect({ id, value, onChange, onBlur, userEmail, hasUserSetValue }, ref) {
+    const { t } = useLocale()
     const [teachers, setTeachers] = useState<Teacher[]>([])
     const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -30,7 +32,7 @@ export const TeacherSelect = forwardRef<HTMLSelectElement, TeacherSelectProps>(
         .catch((err) => {
           if (cancelled) return
           setLoadError(
-            err instanceof SheetsAccessError ? err.message : 'Could not load the teacher list.',
+            err instanceof SheetsAccessError ? err.message : t('teacherLoadError'),
           )
         })
       return () => {
@@ -50,7 +52,7 @@ export const TeacherSelect = forwardRef<HTMLSelectElement, TeacherSelectProps>(
           className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-indigo-500 focus:outline-none"
         >
           <option value="" disabled>
-            Select a teacher
+            {t('selectTeacher')}
           </option>
           {teachers.map((teacher) => (
             <option key={teacher.email || teacher.name} value={teacher.name}>
