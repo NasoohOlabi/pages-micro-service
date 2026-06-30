@@ -10,10 +10,11 @@ interface StudentAutocompleteProps {
   value: string
   onChange: (value: string) => void
   onBlur: () => void
+  ready: boolean
 }
 
 export const StudentAutocomplete = forwardRef<HTMLInputElement, StudentAutocompleteProps>(
-  function StudentAutocomplete({ id, value, onChange, onBlur }, forwardedRef) {
+  function StudentAutocomplete({ id, value, onChange, onBlur, ready }, forwardedRef) {
     const { t } = useLocale()
     const [names, setNames] = useState<string[]>([])
     const [loadError, setLoadError] = useState<string | null>(null)
@@ -25,6 +26,7 @@ export const StudentAutocomplete = forwardRef<HTMLInputElement, StudentAutocompl
     useImperativeHandle(forwardedRef, () => inputRef.current as HTMLInputElement)
 
     useEffect(() => {
+      if (!ready) return
       let cancelled = false
       fetchRosterNames()
         .then((result) => {
@@ -40,7 +42,7 @@ export const StudentAutocomplete = forwardRef<HTMLInputElement, StudentAutocompl
         cancelled = true
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [ready])
 
     useEffect(() => {
       function handleClickOutside(event: MouseEvent) {

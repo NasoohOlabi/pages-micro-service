@@ -22,13 +22,14 @@ import { useLocale } from '../i18n/LocaleContext'
 
 interface EntryFormProps {
   user: GoogleUser
+  ready: boolean
 }
 
 function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-export function EntryForm({ user }: EntryFormProps) {
+export function EntryForm({ user, ready }: EntryFormProps) {
   const { t } = useLocale()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -199,6 +200,7 @@ export function EntryForm({ user }: EntryFormProps) {
                       value={typeof value === 'string' ? value : ''}
                       onChange={onChange}
                       onBlur={onBlur}
+                      ready={ready}
                     />
                   )}
                 />
@@ -217,6 +219,7 @@ export function EntryForm({ user }: EntryFormProps) {
                       onBlur={onBlur}
                       userEmail={user.email}
                       hasUserSetValue={teacherTouchedRef.current}
+                      ready={ready}
                     />
                   )}
                 />

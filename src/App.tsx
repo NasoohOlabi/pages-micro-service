@@ -30,7 +30,7 @@ function App() {
               {t('signOut')}
             </button>
           </div>
-          <EntryForm user={user} />
+          <EntryForm user={user} ready={ready} />
         </div>
       )}
     </div>

@@ -10,15 +10,17 @@ interface TeacherSelectProps {
   onBlur: () => void
   userEmail: string
   hasUserSetValue: boolean
+  ready: boolean
 }
 
 export const TeacherSelect = forwardRef<HTMLSelectElement, TeacherSelectProps>(
-  function TeacherSelect({ id, value, onChange, onBlur, userEmail, hasUserSetValue }, ref) {
+  function TeacherSelect({ id, value, onChange, onBlur, userEmail, hasUserSetValue, ready }, ref) {
     const { t } = useLocale()
     const [teachers, setTeachers] = useState<Teacher[]>([])
     const [loadError, setLoadError] = useState<string | null>(null)
 
     useEffect(() => {
+      if (!ready) return
       let cancelled = false
       fetchTeachers()
         .then((result) => {
@@ -39,7 +41,7 @@ export const TeacherSelect = forwardRef<HTMLSelectElement, TeacherSelectProps>(
         cancelled = true
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userEmail])
+    }, [userEmail, ready])
 
     return (
       <div>
