@@ -40,4 +40,11 @@ Local dev needs a `.env.local` (see [.env.example](.env.example)) with Google OA
 
 ## Deployment
 
-CI ([.github/workflows/firebase-hosting.yml](.github/workflows/firebase-hosting.yml)) builds with bun and deploys to Firebase Hosting on every push to `main` — there's no PR preview/staging flow, so treat `main` as production. Build-time vars come from GitHub Actions repo variables; if you add a new `VITE_*` var, also add it to that workflow's `env:` block or the prod build will silently miss it.
+This repo is **local only** — there is no git remote configured, so pushes to `main` and the CI workflow ([.github/workflows/firebase-hosting.yml](.github/workflows/firebase-hosting.yml)) don't apply here. If asked to deploy, just run the Firebase CLI directly:
+
+```sh
+bun run build
+npx firebase-tools deploy --only hosting --project pages-micro-service
+```
+
+The locally logged-in Firebase account only has access to the `pages-micro-service` project (per [.firebaserc](.firebaserc)), not whatever project the CI workflow targets — deploy straight to `pages-micro-service` without trying to push to a remote first.
