@@ -22,7 +22,7 @@ interface AttendanceFormProps {
 
 type AttendanceMode = 'student' | 'group'
 
-const DEFAULT_STATUS: AttendanceStatus = 'حاضر'
+const DEFAULT_STATUS: AttendanceStatus = 'غائب'
 
 function today(): string {
   return new Date().toISOString().slice(0, 10)
