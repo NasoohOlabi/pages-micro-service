@@ -54,33 +54,39 @@ function App() {
               {t('signOut')}
             </button>
           </div>
-          <div className="grid w-full max-w-md grid-cols-3 gap-1 rounded-md border border-gray-200 bg-white p-1">
-            {(['pages', 'points', 'attendance'] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => selectTab(tab)}
-                aria-current={activeTab === tab ? 'page' : undefined}
-                className={`min-h-10 rounded px-3 text-sm font-semibold ${
-                  activeTab === tab
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                {tab === 'pages'
-                  ? t('pagesTab')
-                  : tab === 'points'
-                    ? t('pointsTab')
-                    : t('attendanceTab')}
-              </button>
-            ))}
-          </div>
-          {activeTab === 'pages' ? (
-            <EntryForm user={user} ready={ready && accessToken !== null} />
-          ) : activeTab === 'points' ? (
-            <PointsForm user={user} ready={ready && accessToken !== null} />
+          {!accessToken ? (
+            <SignInButton onClick={signIn} disabled={!ready} />
           ) : (
-            <AttendanceForm ready={ready && accessToken !== null} />
+            <>
+              <div className="grid w-full max-w-md grid-cols-3 gap-1 rounded-md border border-gray-200 bg-white p-1">
+                {(['pages', 'points', 'attendance'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => selectTab(tab)}
+                    aria-current={activeTab === tab ? 'page' : undefined}
+                    className={`min-h-10 rounded px-3 text-sm font-semibold ${
+                      activeTab === tab
+                        ? 'bg-indigo-600 text-white'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {tab === 'pages'
+                      ? t('pagesTab')
+                      : tab === 'points'
+                        ? t('pointsTab')
+                        : t('attendanceTab')}
+                  </button>
+                ))}
+              </div>
+              {activeTab === 'pages' ? (
+                <EntryForm user={user} ready={ready} />
+              ) : activeTab === 'points' ? (
+                <PointsForm user={user} ready={ready} />
+              ) : (
+                <AttendanceForm ready={ready} />
+              )}
+            </>
           )}
         </div>
       )}

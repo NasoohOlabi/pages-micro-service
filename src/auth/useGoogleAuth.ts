@@ -24,6 +24,7 @@ interface UseGoogleAuthResult {
 
 const STORAGE_KEY = 'google-auth'
 const REFRESH_MARGIN_MS = 5 * 60 * 1000
+type TokenRequestMode = 'interactive' | 'silent'
 
 interface StoredAuth {
   accessToken: string
@@ -99,6 +100,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
     Window['google']['accounts']['oauth2']['initTokenClient']
   > | null>(null)
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tokenRequestModeRef = useRef<TokenRequestMode>('silent')
   // Resolvers waiting on the next requestAccessToken callback (used by the 401
   // retry path so a Sheets call can await a fresh token before retrying).
   const tokenWaitersRef = useRef<Array<{ resolve: () => void; reject: (e: unknown) => void }>>([])
@@ -116,9 +118,22 @@ export function useGoogleAuth(): UseGoogleAuthResult {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
     const delay = Math.max(expiresAt - Date.now() - REFRESH_MARGIN_MS, 0)
     refreshTimerRef.current = setTimeout(() => {
+      tokenRequestModeRef.current = 'silent'
       tokenClientRef.current?.requestAccessToken({ prompt: '' })
     }, delay)
   }, [])
+
+  const handleTokenFailure = useCallback(
+    (err: unknown) => {
+      if (tokenRequestModeRef.current === 'interactive') {
+        setError(t('signInFailed'))
+      }
+      setAccessToken(null)
+      window.gapi.client.setToken(null)
+      settleTokenWaiters(err)
+    },
+    [settleTokenWaiters, t],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -141,11 +156,11 @@ export function useGoogleAuth(): UseGoogleAuthResult {
               scope: response.scope,
             })
             if (response.error || !response.access_token) {
-              setError(t('signInFailed'))
-              settleTokenWaiters(new Error(response.error ?? 'no access token'))
+              handleTokenFailure(new Error(response.error ?? 'no access token'))
               return
             }
             window.gapi.client.setToken({ access_token: response.access_token })
+            setError(null)
             setAccessToken(response.access_token)
             const expiresAt = Date.now() + (response.expires_in ?? 3600) * 1000
             // The token is live now — unblock any 401 retry waiting on it before
@@ -167,6 +182,10 @@ export function useGoogleAuth(): UseGoogleAuthResult {
               }
             }
           },
+          error_callback: (err) => {
+            console.warn('[auth] token request failed', err)
+            handleTokenFailure(new Error(err.message ?? err.type ?? 'token request failed'))
+          },
         })
 
         registerTokenRefresher(
@@ -179,6 +198,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
               }
               console.info('[auth] refresher requesting new access token (prompt: "")')
               tokenWaitersRef.current.push({ resolve, reject })
+              tokenRequestModeRef.current = 'silent'
               tokenClientRef.current.requestAccessToken({ prompt: '' })
             }),
         )
@@ -205,6 +225,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
             // callback set both the client token and accessToken once it lands.
             // Until then accessToken stays null so no Sheets call fires (401).
             console.info('[auth] stored token expired — requesting fresh token on load')
+            tokenRequestModeRef.current = 'silent'
             tokenClientRef.current?.requestAccessToken({ prompt: '' })
           }
         }
@@ -227,6 +248,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
 
   const signIn = useCallback(() => {
     setError(null)
+    tokenRequestModeRef.current = 'interactive'
     tokenClientRef.current?.requestAccessToken({ prompt: '' })
   }, [])
 

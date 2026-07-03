@@ -51,6 +51,7 @@ interface GoogleIdentityNamespace {
         client_id: string
         scope: string
         callback: (response: TokenResponse) => void
+        error_callback?: (error: TokenClientError) => void
       }): TokenClient
       revoke(accessToken: string, callback?: () => void): void
     }
@@ -58,7 +59,7 @@ interface GoogleIdentityNamespace {
 }
 
 interface TokenClient {
-  requestAccessToken(overrideConfig?: { prompt?: string }): void
+  requestAccessToken(overrideConfig?: { prompt?: '' | 'consent' | 'select_account' }): void
 }
 
 interface TokenResponse {
@@ -66,4 +67,9 @@ interface TokenResponse {
   expires_in?: number
   scope?: string
   error?: string
+}
+
+interface TokenClientError {
+  type?: string
+  message?: string
 }
