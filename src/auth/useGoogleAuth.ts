@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { config } from '../config'
+import { registerTokenRefresher } from './token'
 import { useLocale } from '../i18n/LocaleContext'
 
 const GIS_SRC = 'https://accounts.google.com/gsi/client'
@@ -42,6 +43,13 @@ function loadStoredAuth(): StoredAuth | null {
   }
 }
 
+// A stored token is only usable if it still has comfortable life left. An
+// expired (or about-to-expire) token must not be handed to the Sheets client —
+// doing so produces 401s until the silent refresh lands.
+function isTokenLive(stored: StoredAuth): boolean {
+  return stored.expiresAt - REFRESH_MARGIN_MS > Date.now()
+}
+
 function saveStoredAuth(stored: StoredAuth) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(stored))
 }
@@ -82,14 +90,27 @@ export function useGoogleAuth(): UseGoogleAuthResult {
   const { t } = useLocale()
   const [ready, setReady] = useState(false)
   const [user, setUser] = useState<GoogleUser | null>(() => loadStoredAuth()?.user ?? null)
-  const [accessToken, setAccessToken] = useState<string | null>(
-    () => loadStoredAuth()?.accessToken ?? null,
-  )
+  const [accessToken, setAccessToken] = useState<string | null>(() => {
+    const stored = loadStoredAuth()
+    return stored && isTokenLive(stored) ? stored.accessToken : null
+  })
   const [error, setError] = useState<string | null>(null)
   const tokenClientRef = useRef<ReturnType<
     Window['google']['accounts']['oauth2']['initTokenClient']
   > | null>(null)
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Resolvers waiting on the next requestAccessToken callback (used by the 401
+  // retry path so a Sheets call can await a fresh token before retrying).
+  const tokenWaitersRef = useRef<Array<{ resolve: () => void; reject: (e: unknown) => void }>>([])
+
+  const settleTokenWaiters = useCallback((err?: unknown) => {
+    const waiters = tokenWaitersRef.current
+    tokenWaitersRef.current = []
+    for (const waiter of waiters) {
+      if (err) waiter.reject(err)
+      else waiter.resolve()
+    }
+  }, [])
 
   const scheduleRefresh = useCallback((expiresAt: number) => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
@@ -113,38 +134,82 @@ export function useGoogleAuth(): UseGoogleAuthResult {
           client_id: config.googleClientId,
           scope: SCOPES,
           callback: async (response) => {
+            console.info('[auth] token callback', {
+              error: response.error,
+              hasToken: !!response.access_token,
+              expiresIn: response.expires_in,
+              scope: response.scope,
+            })
             if (response.error || !response.access_token) {
               setError(t('signInFailed'))
+              settleTokenWaiters(new Error(response.error ?? 'no access token'))
               return
             }
             window.gapi.client.setToken({ access_token: response.access_token })
             setAccessToken(response.access_token)
             const expiresAt = Date.now() + (response.expires_in ?? 3600) * 1000
+            // The token is live now — unblock any 401 retry waiting on it before
+            // the (slower) profile fetch.
+            settleTokenWaiters()
+            scheduleRefresh(expiresAt)
             try {
               const profile = await fetchUserInfo(response.access_token)
               setUser(profile)
               saveStoredAuth({ accessToken: response.access_token, user: profile, expiresAt })
-              scheduleRefresh(expiresAt)
             } catch {
-              setError(t('signedInProfileError'))
+              // On a silent refresh we already have the user; reuse it so a
+              // transient userinfo hiccup doesn't drop the session.
+              const existing = loadStoredAuth()?.user
+              if (existing) {
+                saveStoredAuth({ accessToken: response.access_token, user: existing, expiresAt })
+              } else {
+                setError(t('signedInProfileError'))
+              }
             }
           },
         })
 
+        registerTokenRefresher(
+          () =>
+            new Promise<void>((resolve, reject) => {
+              if (!tokenClientRef.current) {
+                console.error('[auth] refresher called but token client not ready')
+                reject(new Error('Token client not ready'))
+                return
+              }
+              console.info('[auth] refresher requesting new access token (prompt: "")')
+              tokenWaitersRef.current.push({ resolve, reject })
+              tokenClientRef.current.requestAccessToken({ prompt: '' })
+            }),
+        )
+
         if (!cancelled) setReady(true)
 
         const stored = loadStoredAuth()
+        console.info('[auth] init complete', {
+          hasStored: !!stored,
+          tokenLive: stored ? isTokenLive(stored) : null,
+          expiresAt: stored ? new Date(stored.expiresAt).toISOString() : null,
+          now: new Date().toISOString(),
+        })
         if (stored && !cancelled) {
-          window.gapi.client.setToken({ access_token: stored.accessToken })
-          setAccessToken(stored.accessToken)
+          // Show the user optimistically either way (skip the login flash).
           setUser(stored.user)
-          if (stored.expiresAt - REFRESH_MARGIN_MS <= Date.now()) {
-            tokenClientRef.current?.requestAccessToken({ prompt: '' })
-          } else {
+          if (isTokenLive(stored)) {
+            console.info('[auth] reusing stored token (will self-heal via 401 retry if rejected)')
+            window.gapi.client.setToken({ access_token: stored.accessToken })
+            setAccessToken(stored.accessToken)
             scheduleRefresh(stored.expiresAt)
+          } else {
+            // Don't install the stale token — refresh silently and let the
+            // callback set both the client token and accessToken once it lands.
+            // Until then accessToken stays null so no Sheets call fires (401).
+            console.info('[auth] stored token expired — requesting fresh token on load')
+            tokenClientRef.current?.requestAccessToken({ prompt: '' })
           }
         }
-      } catch {
+      } catch (err) {
+        console.error('[auth] init failed', err)
         if (!cancelled) {
           setError(t('googleLoadError'))
         }
@@ -155,6 +220,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
     return () => {
       cancelled = true
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+      settleTokenWaiters(new Error('Auth unmounted'))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleRefresh])

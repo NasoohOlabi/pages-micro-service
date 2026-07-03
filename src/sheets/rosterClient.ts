@@ -1,13 +1,16 @@
 import { config } from '../config'
+import { withTokenRetry } from '../auth/token'
 import { SheetsAccessError } from './sheetsClient'
 
 let rosterPromise: Promise<string[]> | null = null
 
 async function resolveTabTitle(): Promise<string> {
-  const response = await window.gapi.client.sheets.spreadsheets.get({
-    spreadsheetId: config.rosterSheetId,
-    fields: 'sheets.properties',
-  })
+  const response = await withTokenRetry(() =>
+    window.gapi.client.sheets.spreadsheets.get({
+      spreadsheetId: config.rosterSheetId,
+      fields: 'sheets.properties',
+    }),
+  )
   const targetGid = Number(config.rosterGid)
   const sheet = response.result.sheets?.find((s) => s.properties.sheetId === targetGid)
   if (!sheet) {
@@ -24,10 +27,12 @@ async function loadRosterNames(): Promise<string[]> {
   try {
     const title = await resolveTabTitle()
     const range = `${quoteSheetTitle(title)}!${config.rosterNameColumn}2:${config.rosterNameColumn}`
-    const response = await window.gapi.client.sheets.spreadsheets.values.get({
-      spreadsheetId: config.rosterSheetId,
-      range,
-    })
+    const response = await withTokenRetry(() =>
+      window.gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: config.rosterSheetId,
+        range,
+      }),
+    )
     const rows = response.result.values ?? []
     const names = rows.map((row) => row[0]?.trim()).filter((name): name is string => !!name)
     return Array.from(new Set(names))

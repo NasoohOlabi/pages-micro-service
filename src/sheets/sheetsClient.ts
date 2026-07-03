@@ -1,11 +1,12 @@
 import { config } from '../config'
+import { withTokenRetry } from '../auth/token'
 import { COLUMN_ORDER, UNIQUE_KEY, rowToValues, type SheetRowValues } from './schema'
 
 export class SheetsAccessError extends Error {}
 
-async function withAccessErrorHandling<T>(fn: () => Promise<T>): Promise<T> {
+export async function withSheetsAccessErrorHandling<T>(fn: () => Promise<T>): Promise<T> {
   try {
-    return await fn()
+    return await withTokenRetry(fn)
   } catch (err) {
     const status = (err as { status?: number; result?: { error?: { code?: number } } })?.status
     const code = status ?? (err as { result?: { error?: { code?: number } } })?.result?.error?.code
@@ -19,7 +20,7 @@ async function withAccessErrorHandling<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 export async function fetchExistingRows(): Promise<string[][]> {
-  return withAccessErrorHandling(async () => {
+  return withSheetsAccessErrorHandling(async () => {
     const response = await window.gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId: config.sheetId,
       range: config.sheetRange,
@@ -43,7 +44,7 @@ export function findDuplicatePages(rows: string[][], values: SheetRowValues[]): 
 }
 
 export async function appendRows(rows: SheetRowValues[]): Promise<void> {
-  await withAccessErrorHandling(() =>
+  await withSheetsAccessErrorHandling(() =>
     window.gapi.client.sheets.spreadsheets.values.append({
       spreadsheetId: config.sheetId,
       range: config.sheetRange,

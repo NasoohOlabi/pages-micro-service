@@ -33,6 +33,12 @@ interface GapiClient {
           valueInputOption: string
           resource: { values: string[][] }
         }): Promise<unknown>
+        update(params: {
+          spreadsheetId: string
+          range: string
+          valueInputOption: string
+          resource: { values: string[][] }
+        }): Promise<unknown>
       }
     }
   }
@@ -58,5 +64,6 @@ interface TokenClient {
 interface TokenResponse {
   access_token: string
   expires_in?: number
+  scope?: string
   error?: string
 }

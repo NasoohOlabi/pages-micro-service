@@ -1,4 +1,5 @@
 import { config } from '../config'
+import { withTokenRetry } from '../auth/token'
 import { SheetsAccessError } from './sheetsClient'
 
 export interface Teacher {
@@ -15,10 +16,12 @@ function quoteSheetTitle(title: string): string {
 async function loadTeachers(): Promise<Teacher[]> {
   try {
     const range = `${quoteSheetTitle(config.teachersSheetName)}!${config.teachersNameColumn}2:${config.teachersEmailColumn}`
-    const response = await window.gapi.client.sheets.spreadsheets.values.get({
-      spreadsheetId: config.teachersSheetId,
-      range,
-    })
+    const response = await withTokenRetry(() =>
+      window.gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: config.teachersSheetId,
+        range,
+      }),
+    )
     const nameIdx = 0
     const emailIdx = config.teachersEmailColumn.charCodeAt(0) - config.teachersNameColumn.charCodeAt(0)
     const rows = response.result.values ?? []
