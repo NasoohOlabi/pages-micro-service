@@ -35,8 +35,8 @@ function App() {
 
   return (
     <div className="relative flex min-h-svh flex-col items-center justify-start gap-2 bg-gray-50 px-4 py-3 sm:justify-center sm:gap-6 sm:py-8">
-      <LanguageSwitcher className="absolute top-2 end-16 sm:top-4" />
-      {user && <UserMenu user={user} onSignOut={signOut} className="absolute top-2 end-4 sm:top-4" />}
+      <LanguageSwitcher className="absolute top-2 left-2 sm:top-4 sm:left-4" />
+      {user && <UserMenu user={user} onSignOut={signOut} className="absolute top-2 right-2 sm:top-4 sm:right-4" />}
 
       <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">{t('appTitle')}</h1>
 

@@ -25,7 +25,7 @@ export function UserMenu({ user, onSignOut, className }: UserMenuProps) {
   }, [])
 
   return (
-    <div ref={containerRef} className={`relative ${className ?? ''}`}>
+    <div ref={containerRef} className={className ?? 'relative'}>
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
@@ -38,7 +38,7 @@ export function UserMenu({ user, onSignOut, className }: UserMenuProps) {
       {isOpen && (
         <div
           role="menu"
-          className="absolute end-0 z-10 mt-2 w-64 rounded-md border border-gray-200 bg-white p-2 text-start shadow-lg"
+          className="absolute right-0 z-10 mt-2 w-64 rounded-md border border-gray-200 bg-white p-2 text-start shadow-lg"
         >
           <p className="truncate px-2 py-1 text-sm text-gray-500">
             {t('signedInAs', { email: user.email })}
