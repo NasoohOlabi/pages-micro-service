@@ -116,7 +116,7 @@ async function ensureDateColumn(sheet: AttendanceSheet, dateLabel: string): Prom
     window.gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId: config.attendanceSheetId,
       range: cellRange(1, columnIndex),
-      valueInputOption: 'USER_ENTERED',
+      valueInputOption: 'RAW',
       resource: { values: [[dateLabel]] },
     }),
   )
