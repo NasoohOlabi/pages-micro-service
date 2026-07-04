@@ -89,7 +89,7 @@ export function EntryForm({ user, ready }: EntryFormProps) {
       teacher: values.teacher,
       startPage: undefined,
       endPage: undefined,
-      date: today(),
+      date: values.date,
     })
     studentInputRef.current?.focus()
   }

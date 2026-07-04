@@ -53,7 +53,7 @@ export function PointsForm({ user, ready }: PointsFormProps) {
         student: '',
         teacher: values.teacher,
         points: undefined,
-        date: today(),
+        date: values.date,
         reason: '',
       })
       studentInputRef.current?.focus()
