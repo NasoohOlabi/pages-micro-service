@@ -8,6 +8,7 @@ import { RosterView } from './form/RosterView'
 import { LanguageSwitcher } from './i18n/LanguageSwitcher'
 import { UserMenu } from './auth/UserMenu'
 import { useLocale } from './i18n/LocaleContext'
+import { PwaUpdateToast } from './PwaUpdateToast'
 
 type AppTab = 'pages' | 'points' | 'attendance' | 'students'
 
@@ -87,6 +88,7 @@ function App() {
           )}
         </div>
       )}
+      <PwaUpdateToast />
     </div>
   )
 }

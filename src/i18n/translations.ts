@@ -79,6 +79,9 @@ export const translations = {
     reasonRequired: 'Reason is required',
     startPageLessThanEnd: 'Start page must be less than or equal to end page',
     language: 'Language',
+    pwaUpdateAvailable: 'A new version is available.',
+    reloadPage: 'Reload',
+    dismiss: 'Dismiss',
   },
   ar: {
     attendanceTab: 'الحضور',
@@ -154,6 +157,9 @@ export const translations = {
     reasonRequired: 'السبب مطلوب',
     startPageLessThanEnd: 'يجب أن تكون صفحة البداية أقل من أو تساوي صفحة النهاية',
     language: 'اللغة',
+    pwaUpdateAvailable: '\u064a\u062a\u0648\u0641\u0631 \u0625\u0635\u062f\u0627\u0631 \u062c\u062f\u064a\u062f.',
+    reloadPage: '\u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u062a\u062d\u0645\u064a\u0644',
+    dismiss: '\u062a\u062c\u0627\u0647\u0644',
   },
 } as const satisfies Record<Locale, Record<string, string>>
 
