@@ -24,8 +24,18 @@ type AttendanceMode = 'student' | 'group'
 
 const DEFAULT_STATUS: AttendanceStatus = 'غائب'
 
+const DATE_STORAGE_KEY = 'attendance-date'
+
 function today(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+function readStoredDate(): string {
+  try {
+    return sessionStorage.getItem(DATE_STORAGE_KEY) || today()
+  } catch {
+    return today()
+  }
 }
 
 function readSubTabFromUrl(): AttendanceMode {
@@ -73,7 +83,7 @@ function StatusSelect({
 export function AttendanceForm({ ready }: AttendanceFormProps) {
   const { t } = useLocale()
   const [mode, setMode] = useState<AttendanceMode>(readSubTabFromUrl)
-  const [date, setDate] = useState(today)
+  const [date, setDate] = useState(readStoredDate)
   const [sheet, setSheet] = useState<AttendanceSheet | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [studentQuery, setStudentQuery] = useState('')
@@ -99,6 +109,14 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
     return () => window.removeEventListener('popstate', handlePopState)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(DATE_STORAGE_KEY, date)
+    } catch {
+      // ignore storage failures (e.g. private browsing)
+    }
+  }, [date])
 
   const selectMode = (nextMode: AttendanceMode) => {
     const url = new URL(window.location.href)
