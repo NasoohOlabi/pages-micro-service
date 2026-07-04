@@ -40,11 +40,13 @@ Local dev needs a `.env.local` (see [.env.example](.env.example)) with Google OA
 
 ## Deployment
 
-This repo is **local only** — there is no git remote configured, so pushes to `main` and the CI workflow ([.github/workflows/firebase-hosting.yml](.github/workflows/firebase-hosting.yml)) don't apply here. If asked to deploy, just run the Firebase CLI directly:
+The git remote (`origin`) only has a `master` branch, but the CI workflow ([.github/workflows/firebase-hosting.yml](.github/workflows/firebase-hosting.yml)) only triggers on push to `main`, and it deploys to Firebase project `mrp-masjid-al-botty`. So pushing to `master` never triggers that CI deploy.
+
+**Always deploy locally when asked to deploy** — don't rely on CI. Run the Firebase CLI directly:
 
 ```sh
 bun run build
 npx firebase-tools deploy --only hosting --project pages-micro-service
 ```
 
-The locally logged-in Firebase account only has access to the `pages-micro-service` project (per [.firebaserc](.firebaserc)), not whatever project the CI workflow targets — deploy straight to `pages-micro-service` without trying to push to a remote first.
+The locally logged-in Firebase account only has access to the `pages-micro-service` project (per [.firebaserc](.firebaserc)), which differs from the project the CI workflow targets — always deploy straight to `pages-micro-service`.
