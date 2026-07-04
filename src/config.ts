@@ -7,7 +7,14 @@ function requireEnv(name: keyof ImportMetaEnv): string {
 }
 
 export const config = {
-  googleClientId: requireEnv('VITE_GOOGLE_CLIENT_ID'),
+  firebase: {
+    apiKey: requireEnv('VITE_FIREBASE_API_KEY'),
+    authDomain: requireEnv('VITE_FIREBASE_AUTH_DOMAIN'),
+    projectId: requireEnv('VITE_FIREBASE_PROJECT_ID'),
+    appId: requireEnv('VITE_FIREBASE_APP_ID'),
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  },
   sheetId: requireEnv('VITE_SHEET_ID'),
   sheetRange: requireEnv('VITE_SHEET_RANGE'),
   pointsSheetRange: requireEnv('VITE_POINTS_SHEET_RANGE'),

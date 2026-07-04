@@ -3,7 +3,6 @@ export {}
 declare global {
   interface Window {
     gapi: GapiNamespace
-    google: GoogleIdentityNamespace
   }
 }
 
@@ -42,34 +41,4 @@ interface GapiClient {
       }
     }
   }
-}
-
-interface GoogleIdentityNamespace {
-  accounts: {
-    oauth2: {
-      initTokenClient(config: {
-        client_id: string
-        scope: string
-        callback: (response: TokenResponse) => void
-        error_callback?: (error: TokenClientError) => void
-      }): TokenClient
-      revoke(accessToken: string, callback?: () => void): void
-    }
-  }
-}
-
-interface TokenClient {
-  requestAccessToken(overrideConfig?: { prompt?: '' | 'consent' | 'select_account' }): void
-}
-
-interface TokenResponse {
-  access_token: string
-  expires_in?: number
-  scope?: string
-  error?: string
-}
-
-interface TokenClientError {
-  type?: string
-  message?: string
 }
