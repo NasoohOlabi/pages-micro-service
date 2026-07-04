@@ -5,6 +5,7 @@ import { EntryForm } from './form/EntryForm'
 import { PointsForm } from './form/PointsForm'
 import { AttendanceForm } from './form/AttendanceForm'
 import { LanguageSwitcher } from './i18n/LanguageSwitcher'
+import { UserMenu } from './auth/UserMenu'
 import { useLocale } from './i18n/LocaleContext'
 
 type AppTab = 'pages' | 'points' | 'attendance'
@@ -34,7 +35,8 @@ function App() {
 
   return (
     <div className="relative flex min-h-svh flex-col items-center justify-start gap-2 bg-gray-50 px-4 py-3 sm:justify-center sm:gap-6 sm:py-8">
-      <LanguageSwitcher className="absolute top-2 end-4 sm:top-4" />
+      <LanguageSwitcher className="absolute top-2 end-16 sm:top-4" />
+      {user && <UserMenu user={user} onSignOut={signOut} className="absolute top-2 end-4 sm:top-4" />}
 
       <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">{t('appTitle')}</h1>
 
@@ -44,16 +46,6 @@ function App() {
         <SignInButton onClick={signIn} disabled={!ready} />
       ) : (
         <div className="flex w-full max-w-2xl flex-col items-center gap-2 sm:gap-3">
-          <div className="flex w-full max-w-md items-center justify-between px-6 text-sm text-gray-500">
-            <span>{t('signedInAs', { email: user.email })}</span>
-            <button
-              type="button"
-              onClick={signOut}
-              className="font-medium text-indigo-600 hover:text-indigo-500"
-            >
-              {t('signOut')}
-            </button>
-          </div>
           {!accessToken ? (
             <SignInButton onClick={signIn} disabled={!ready} />
           ) : (

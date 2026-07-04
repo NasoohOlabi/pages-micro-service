@@ -204,20 +204,6 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
       {mode === 'student' ? (
         <form onSubmit={handleStudentSubmit} className="flex flex-col gap-2 sm:gap-4">
           <div className="flex flex-col gap-1 text-start">
-            <label htmlFor="attendance-date" className="text-sm font-medium text-gray-700">
-              {t('dateLabel')}
-            </label>
-            <input
-              id="attendance-date"
-              type="date"
-              required
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none sm:py-3"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1 text-start">
             <label htmlFor="attendance-student" className="text-sm font-medium text-gray-700">
               {t('studentLabel')}
             </label>
@@ -228,6 +214,20 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
               onChange={setStudent}
               onBlur={() => undefined}
               ready={ready}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1 text-start">
+            <label htmlFor="attendance-date" className="text-sm font-medium text-gray-700">
+              {t('dateLabel')}
+            </label>
+            <input
+              id="attendance-date"
+              type="date"
+              required
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none sm:py-3"
             />
           </div>
 
