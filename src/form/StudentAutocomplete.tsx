@@ -9,12 +9,13 @@ interface StudentAutocompleteProps {
   id: string
   value: string
   onChange: (value: string) => void
+  onSelect?: (value: string) => void
   onBlur: () => void
   ready: boolean
 }
 
 export const StudentAutocomplete = forwardRef<HTMLInputElement, StudentAutocompleteProps>(
-  function StudentAutocomplete({ id, value, onChange, onBlur, ready }, forwardedRef) {
+  function StudentAutocomplete({ id, value, onChange, onSelect, onBlur, ready }, forwardedRef) {
     const { t } = useLocale()
     const [names, setNames] = useState<string[]>([])
     const [loadError, setLoadError] = useState<string | null>(null)
@@ -76,7 +77,7 @@ export const StudentAutocomplete = forwardRef<HTMLInputElement, StudentAutocompl
     }, [fuse, names, value])
 
     function selectMatch(name: string) {
-      onChange(name)
+      ;(onSelect ?? onChange)(name)
       setIsOpen(false)
     }
 

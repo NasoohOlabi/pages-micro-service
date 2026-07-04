@@ -28,6 +28,11 @@ function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+function readSubTabFromUrl(): AttendanceMode {
+  const sub = new URLSearchParams(window.location.search).get('sub')
+  return sub === 'group' ? 'group' : 'student'
+}
+
 function StatusSelect({
   value,
   onChange,
@@ -67,11 +72,12 @@ function StatusSelect({
 
 export function AttendanceForm({ ready }: AttendanceFormProps) {
   const { t } = useLocale()
-  const [mode, setMode] = useState<AttendanceMode>('student')
+  const [mode, setMode] = useState<AttendanceMode>(readSubTabFromUrl)
   const [date, setDate] = useState(today)
   const [sheet, setSheet] = useState<AttendanceSheet | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [student, setStudent] = useState('')
+  const [studentQuery, setStudentQuery] = useState('')
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([])
   const [studentStatus, setStudentStatus] = useState<AttendanceStatus>(DEFAULT_STATUS)
   const [group, setGroup] = useState('')
   const [groupStatuses, setGroupStatuses] = useState<Record<number, AttendanceStatus>>({})
@@ -79,6 +85,29 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const studentInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (!params.has('sub')) {
+      params.set('sub', mode)
+      const url = new URL(window.location.href)
+      url.search = params.toString()
+      window.history.replaceState(null, '', url)
+    }
+    const handlePopState = () => setMode(readSubTabFromUrl())
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const selectMode = (nextMode: AttendanceMode) => {
+    const url = new URL(window.location.href)
+    url.searchParams.set('sub', nextMode)
+    window.history.pushState(null, '', url)
+    setMode(nextMode)
+    setSubmitError(null)
+    setSuccessMessage(null)
+  }
 
   useEffect(() => {
     if (!ready) return
@@ -106,6 +135,13 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
     return sheet.students.filter((row) => row.group === group)
   }, [sheet, group])
 
+  const selectedStudentRows = useMemo<AttendanceStudentRow[]>(() => {
+    if (!sheet) return []
+    return selectedStudents
+      .map((name) => findAttendanceStudent(sheet, name))
+      .filter((row): row is AttendanceStudentRow => Boolean(row))
+  }, [sheet, selectedStudents])
+
   useEffect(() => {
     if (!sheet) return
     const dateLabel = formatAttendanceDate(date)
@@ -117,13 +153,14 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
     setGroupStatuses(nextStatuses)
   }, [date, groupRows, sheet])
 
-  useEffect(() => {
-    if (!sheet || !student.trim()) return
-    const row = findAttendanceStudent(sheet, student)
-    if (!row) return
-    const existingStatus = attendanceStatusForDate(row, sheet, formatAttendanceDate(date))
-    if (existingStatus) setStudentStatus(existingStatus)
-  }, [date, sheet, student])
+  const addSelectedStudent = (name: string) => {
+    setSelectedStudents((current) => (current.includes(name) ? current : [...current, name]))
+    setStudentQuery('')
+  }
+
+  const removeSelectedStudent = (name: string) => {
+    setSelectedStudents((current) => current.filter((entry) => entry !== name))
+  }
 
   const refreshSheet = async () => {
     const nextSheet = await fetchAttendanceSheet()
@@ -134,12 +171,30 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
     event.preventDefault()
     setSubmitError(null)
     setSuccessMessage(null)
+
+    if (selectedStudentRows.length !== selectedStudents.length) {
+      setSubmitError(t('attendanceSaveError'))
+      return
+    }
+
     setIsSubmitting(true)
     try {
-      await saveStudentAttendance(student, date, studentStatus)
+      if (selectedStudentRows.length === 1) {
+        await saveStudentAttendance(selectedStudentRows[0].student, date, studentStatus)
+      } else {
+        await saveGroupAttendance(
+          date,
+          selectedStudentRows.map((row) => ({ rowNumber: row.rowNumber, status: studentStatus })),
+        )
+      }
       await refreshSheet()
-      setSuccessMessage(t('attendanceStudentSaved', { student }))
-      setStudent('')
+      setSuccessMessage(
+        selectedStudentRows.length === 1
+          ? t('attendanceStudentSaved', { student: selectedStudentRows[0].student })
+          : t('attendanceGroupSaved', { count: selectedStudentRows.length }),
+      )
+      setSelectedStudents([])
+      setStudentQuery('')
       setStudentStatus(DEFAULT_STATUS)
       studentInputRef.current?.focus()
     } catch (err) {
@@ -182,11 +237,7 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
           <button
             key={nextMode}
             type="button"
-            onClick={() => {
-              setMode(nextMode)
-              setSubmitError(null)
-              setSuccessMessage(null)
-            }}
+            onClick={() => selectMode(nextMode)}
             aria-current={mode === nextMode ? 'page' : undefined}
             className={`min-h-10 rounded px-3 text-sm font-semibold ${
               mode === nextMode
@@ -210,11 +261,32 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
             <StudentAutocomplete
               ref={studentInputRef}
               id="attendance-student"
-              value={student}
-              onChange={setStudent}
+              value={studentQuery}
+              onChange={setStudentQuery}
+              onSelect={addSelectedStudent}
               onBlur={() => undefined}
               ready={ready}
             />
+            {selectedStudents.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {selectedStudents.map((name) => (
+                  <span
+                    key={name}
+                    className="inline-flex items-center gap-1 rounded-full bg-indigo-50 py-1 ps-3 pe-2 text-sm font-medium text-indigo-700"
+                  >
+                    {name}
+                    <button
+                      type="button"
+                      onClick={() => removeSelectedStudent(name)}
+                      aria-label={t('removeStudent', { student: name })}
+                      className="rounded-full px-1 text-indigo-500 hover:bg-indigo-100 hover:text-indigo-800"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-1 text-start">
@@ -247,10 +319,14 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
 
           <button
             type="submit"
-            disabled={isSubmitting || !student.trim()}
+            disabled={isSubmitting || selectedStudents.length === 0}
             className="min-h-11 rounded-md bg-indigo-600 px-4 py-3 text-base font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isSubmitting ? t('saving') : t('saveAttendance')}
+            {isSubmitting
+              ? t('saving')
+              : selectedStudents.length > 1
+                ? t('saveAttendanceCount', { count: selectedStudents.length })
+                : t('saveAttendance')}
           </button>
         </form>
       ) : (
