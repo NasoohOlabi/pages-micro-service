@@ -1,9 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   appendRosterStudent,
   fetchRosterSheet,
   type RosterSheet,
 } from '../sheets/rosterClient'
+import {
+  fetchAttendanceSheet,
+  getStudentAttendanceHistory,
+  type AttendanceHistoryEntry,
+} from '../sheets/attendanceClient'
 import { SheetsAccessError } from '../sheets/sheetsClient'
 import { useLocale } from '../i18n/LocaleContext'
 
@@ -28,6 +33,10 @@ export function RosterView({ ready }: RosterViewProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [expandedStudent, setExpandedStudent] = useState<string | null>(null)
+  const [historyByStudent, setHistoryByStudent] = useState<
+    Record<string, AttendanceHistoryEntry[] | 'loading' | 'error'>
+  >({})
 
   useEffect(() => {
     if (!ready) return
@@ -80,6 +89,24 @@ export function RosterView({ ready }: RosterViewProps) {
       ? indexes
       : [sheet.nameColumnIndex, ...indexes].sort((a, b) => a - b)
   }, [sheet])
+
+  const toggleHistory = async (student: string) => {
+    if (expandedStudent === student) {
+      setExpandedStudent(null)
+      return
+    }
+    setExpandedStudent(student)
+    if (historyByStudent[student] !== undefined) return
+
+    setHistoryByStudent((current) => ({ ...current, [student]: 'loading' }))
+    try {
+      const attendanceSheet = await fetchAttendanceSheet()
+      const history = getStudentAttendanceHistory(attendanceSheet, student)
+      setHistoryByStudent((current) => ({ ...current, [student]: history }))
+    } catch {
+      setHistoryByStudent((current) => ({ ...current, [student]: 'error' }))
+    }
+  }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -179,40 +206,71 @@ export function RosterView({ ready }: RosterViewProps) {
           <table className="min-w-full border-separate border-spacing-0 text-sm">
             <thead className="sticky top-0 bg-gray-50">
               <tr>
-                {columnIndexes.map((index) => (
-                  <th
-                    key={index}
-                    scope="col"
-                    className="border-b border-gray-200 px-3 py-2 text-start font-semibold text-gray-700"
-                  >
-                    {sheet.headers[index] || `Column ${index + 1}`}
-                  </th>
-                ))}
+                <th
+                  scope="col"
+                  className="border-b border-gray-200 px-3 py-2 text-start font-semibold text-gray-700"
+                >
+                  {sheet.headers[sheet.nameColumnIndex] || t('studentLabel')}
+                </th>
+                <th scope="col" className="border-b border-gray-200 px-3 py-2 text-start font-semibold text-gray-700" />
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={columnIndexes.length}
-                    className="px-3 py-4 text-center text-gray-500"
-                  >
+                  <td colSpan={2} className="px-3 py-4 text-center text-gray-500">
                     {query.trim() ? t('rosterNoMatches') : t('rosterNoRows')}
                   </td>
                 </tr>
               ) : (
-                rows.map((row, rowIndex) => (
-                  <tr key={`${row.join('|')}-${rowIndex}`} className="odd:bg-white even:bg-gray-50">
-                    {columnIndexes.map((cellIndex) => (
-                      <td
-                        key={cellIndex}
-                        className="border-b border-gray-100 px-3 py-2 text-start text-gray-800"
-                      >
-                        {row[cellIndex] || ''}
-                      </td>
-                    ))}
-                  </tr>
-                ))
+                rows.map((row, rowIndex) => {
+                  const studentName = row[sheet.nameColumnIndex] || ''
+                  const history = historyByStudent[studentName]
+                  const isExpanded = expandedStudent === studentName
+                  return (
+                    <Fragment key={`${row.join('|')}-${rowIndex}`}>
+                      <tr className="odd:bg-white even:bg-gray-50">
+                        <td className="border-b border-gray-100 px-3 py-2 text-start text-gray-800">
+                          {studentName}
+                        </td>
+                        <td className="border-b border-gray-100 px-3 py-2 text-end">
+                          <button
+                            type="button"
+                            onClick={() => toggleHistory(studentName)}
+                            className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                          >
+                            {isExpanded ? t('hideAttendanceHistory') : t('viewAttendanceHistory')}
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="odd:bg-white even:bg-gray-50">
+                          <td colSpan={2} className="border-b border-gray-100 px-3 py-2 text-start text-gray-800">
+                            {history === 'loading' && (
+                              <p className="text-sm text-gray-500">{t('rosterLoading')}</p>
+                            )}
+                            {history === 'error' && (
+                              <p className="text-sm text-red-600">{t('attendanceLoadError')}</p>
+                            )}
+                            {Array.isArray(history) && history.length === 0 && (
+                              <p className="text-sm text-gray-500">{t('attendanceHistoryEmpty')}</p>
+                            )}
+                            {Array.isArray(history) && history.length > 0 && (
+                              <ul className="flex flex-col gap-1">
+                                {history.map((entry) => (
+                                  <li key={entry.date} className="flex justify-between gap-4 text-sm">
+                                    <span className="text-gray-600">{entry.date}</span>
+                                    <span className="font-medium text-gray-900">{entry.status}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })
               )}
             </tbody>
           </table>

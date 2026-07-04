@@ -146,6 +146,27 @@ export function findAttendanceStudent(
   return sheet.students.find((row) => normalize(row.student) === target)
 }
 
+export interface AttendanceHistoryEntry {
+  date: string
+  status: string
+}
+
+export function getStudentAttendanceHistory(
+  sheet: AttendanceSheet,
+  student: string,
+): AttendanceHistoryEntry[] {
+  const row = findAttendanceStudent(sheet, student)
+  if (!row) return []
+  const header = sheet.rows[0] ?? []
+  const history: AttendanceHistoryEntry[] = []
+  for (let index = FIRST_DATE_COLUMN_INDEX; index < header.length; index += 1) {
+    const date = header[index]?.trim()
+    const status = row.values[index]?.trim()
+    if (date && status) history.push({ date, status })
+  }
+  return history
+}
+
 export function attendanceStatusForDate(
   row: AttendanceStudentRow,
   sheet: AttendanceSheet,
