@@ -13,6 +13,7 @@ import {
 } from '../sheets/attendanceClient'
 import { SheetsAccessError } from '../sheets/sheetsClient'
 import { StudentAutocomplete } from './StudentAutocomplete'
+import { DateLabel } from './DateLabel'
 import { useLocale } from '../i18n/LocaleContext'
 import type { TranslationKey } from '../i18n/translations'
 
@@ -308,9 +309,7 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
           </div>
 
           <div className="flex flex-col gap-1 text-start">
-            <label htmlFor="attendance-date" className="text-sm font-medium text-gray-700">
-              {t('dateLabel')}
-            </label>
+            <DateLabel htmlFor="attendance-date" />
             <input
               id="attendance-date"
               type="date"
@@ -351,9 +350,7 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
         <form onSubmit={handleGroupSubmit} className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1 text-start">
-              <label htmlFor="attendance-group-date" className="text-sm font-medium text-gray-700">
-                {t('dateLabel')}
-              </label>
+              <DateLabel htmlFor="attendance-group-date" />
               <input
                 id="attendance-group-date"
                 type="date"

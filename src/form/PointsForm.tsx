@@ -11,6 +11,7 @@ import { appendPointRow } from '../sheets/pointsClient'
 import { SheetsAccessError } from '../sheets/sheetsClient'
 import { StudentAutocomplete } from './StudentAutocomplete'
 import { TeacherSelect } from './TeacherSelect'
+import { DateLabel } from './DateLabel'
 import type { GoogleUser } from '../auth/useGoogleAuth'
 import { useLocale } from '../i18n/LocaleContext'
 
@@ -131,9 +132,7 @@ export function PointsForm({ user, ready }: PointsFormProps) {
       </div>
 
       <div className="flex flex-col gap-1 text-start">
-        <label htmlFor="points-date" className="text-sm font-medium text-gray-700">
-          {t('dateLabel')}
-        </label>
+        <DateLabel htmlFor="points-date" />
         <input
           id="points-date"
           type="date"

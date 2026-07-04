@@ -17,6 +17,7 @@ import {
 import { FIELDS } from './fields'
 import { StudentAutocomplete } from './StudentAutocomplete'
 import { TeacherSelect } from './TeacherSelect'
+import { DateLabel } from './DateLabel'
 import type { GoogleUser } from '../auth/useGoogleAuth'
 import { useLocale } from '../i18n/LocaleContext'
 
@@ -186,9 +187,13 @@ export function EntryForm({ user, ready }: EntryFormProps) {
             </div>
           ) : (
             <>
-              <label htmlFor={field.name} className="text-sm font-medium text-gray-700">
-                {t(field.labelKey)}
-              </label>
+              {field.name === 'date' ? (
+                <DateLabel htmlFor={field.name} />
+              ) : (
+                <label htmlFor={field.name} className="text-sm font-medium text-gray-700">
+                  {t(field.labelKey)}
+                </label>
+              )}
               {field.name === 'student' ? (
                 <Controller
                   name="student"
