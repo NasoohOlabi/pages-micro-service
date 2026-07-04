@@ -5,7 +5,6 @@ import {
   browserLocalPersistence,
   getAuth,
   onAuthStateChanged,
-  reauthenticateWithPopup,
   setPersistence,
   signInWithPopup,
   signOut as firebaseSignOut,
@@ -16,13 +15,17 @@ import { registerTokenRefresher } from './token'
 import { useLocale } from '../i18n/LocaleContext'
 
 const GAPI_SRC = 'https://apis.google.com/js/api.js'
+const GIS_SRC = 'https://accounts.google.com/gsi/client'
 const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
 const STORAGE_KEY = 'firebase-google-sheets-auth'
-const TOKEN_TTL_MS = 55 * 60 * 1000
+// Google access tokens live ~1h; used only when GIS omits expires_in.
+const FALLBACK_TTL_MS = 55 * 60 * 1000
 const REFRESH_MARGIN_MS = 5 * 60 * 1000
 
 const firebaseApp = initializeApp(config.firebase)
 const auth = getAuth(firebaseApp)
+// Firebase owns the persisted *identity*; the Sheets access token comes from GIS
+// (see below) because Firebase can't silently refresh a provider access token.
 const googleProvider = new GoogleAuthProvider()
 googleProvider.addScope(SHEETS_SCOPE)
 
@@ -38,6 +41,11 @@ interface UseGoogleAuthResult {
   error: string | null
   signIn: () => void
   signOut: () => void
+}
+
+interface TokenResult {
+  token: string
+  expiresAt: number
 }
 
 interface StoredAuth {
@@ -113,6 +121,54 @@ async function initGapi() {
   await window.gapi.client.load('sheets', 'v4')
 }
 
+// A single GIS token client fronts every access-token request. Its callbacks are
+// static, so we route each request's result to the current promise via these refs.
+let tokenClient: TokenClient | null = null
+let settleResolve: ((result: TokenResult) => void) | null = null
+let settleReject: ((error: Error) => void) | null = null
+
+function settle(result: TokenResult | null, error?: Error) {
+  const resolve = settleResolve
+  const reject = settleReject
+  settleResolve = null
+  settleReject = null
+  if (result) resolve?.(result)
+  else reject?.(error ?? new Error('Token request failed'))
+}
+
+async function initGis() {
+  await loadScript(GIS_SRC)
+  if (tokenClient) return
+  tokenClient = window.google.accounts.oauth2.initTokenClient({
+    client_id: config.googleClientId,
+    scope: SHEETS_SCOPE,
+    callback: (response) => {
+      if (response.error || !response.access_token) {
+        settle(null, new Error(response.error ?? 'Missing Google access token'))
+        return
+      }
+      const ttl = response.expires_in ? response.expires_in * 1000 : FALLBACK_TTL_MS
+      settle({ token: response.access_token, expiresAt: Date.now() + ttl })
+    },
+    error_callback: (err) => settle(null, new Error(err.type ?? 'Token request failed')),
+  })
+}
+
+// interactive=false → `prompt: ''`: reuse the existing Google session with no UI
+// (silent refresh). interactive=true → show consent, needed for the first grant.
+function requestSheetsToken(interactive: boolean, hint?: string): Promise<TokenResult> {
+  return new Promise<TokenResult>((resolve, reject) => {
+    if (!tokenClient) {
+      reject(new Error('GIS token client not ready'))
+      return
+    }
+    settle(null, new Error('Superseded by a newer token request'))
+    settleResolve = resolve
+    settleReject = reject
+    tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '', hint })
+  })
+}
+
 export function useGoogleAuth(): UseGoogleAuthResult {
   const { t } = useLocale()
   const [ready, setReady] = useState(false)
@@ -124,6 +180,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
   const [error, setError] = useState<string | null>(null)
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const userRef = useRef<User | null>(null)
+  const installTokenRef = useRef<(result: TokenResult, profile: GoogleUser) => void>(() => {})
 
   const clearToken = useCallback(() => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
@@ -132,40 +189,44 @@ export function useGoogleAuth(): UseGoogleAuthResult {
     setAccessToken(null)
   }, [])
 
-  const scheduleTokenExpiry = useCallback(
+  // Silently mint a fresh Sheets token for the current Firebase user — no popup.
+  const silentRefresh = useCallback(async () => {
+    const firebaseUser = userRef.current
+    if (!firebaseUser) throw new Error('No Firebase user')
+    const result = await requestSheetsToken(false, firebaseUser.email ?? undefined)
+    installTokenRef.current(result, toGoogleUser(firebaseUser))
+  }, [])
+
+  const scheduleTokenRefresh = useCallback(
     (expiresAt: number) => {
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
       const delay = Math.max(expiresAt - Date.now() - REFRESH_MARGIN_MS, 0)
-      refreshTimerRef.current = setTimeout(clearToken, delay)
+      refreshTimerRef.current = setTimeout(() => {
+        silentRefresh().catch((err) => {
+          console.warn('[auth] silent token refresh failed', err)
+          clearToken()
+        })
+      }, delay)
     },
-    [clearToken],
+    [silentRefresh, clearToken],
   )
 
-  const installAccessToken = useCallback(
-    (token: string, firebaseUser: User) => {
-      const profile = toGoogleUser(firebaseUser)
-      const expiresAt = Date.now() + TOKEN_TTL_MS
-      window.gapi.client.setToken({ access_token: token })
+  const installToken = useCallback(
+    (result: TokenResult, profile: GoogleUser) => {
+      window.gapi.client.setToken({ access_token: result.token })
       setUser(profile)
-      setAccessToken(token)
+      setAccessToken(result.token)
       setError(null)
-      saveStoredAuth({ accessToken: token, user: profile, expiresAt })
-      scheduleTokenExpiry(expiresAt)
+      saveStoredAuth({ accessToken: result.token, user: profile, expiresAt: result.expiresAt })
+      scheduleTokenRefresh(result.expiresAt)
     },
-    [scheduleTokenExpiry],
+    [scheduleTokenRefresh],
   )
 
-  const getTokenFromPopup = useCallback(
-    async (firebaseUser?: User) => {
-      const result = firebaseUser
-        ? await reauthenticateWithPopup(firebaseUser, googleProvider)
-        : await signInWithPopup(auth, googleProvider)
-      const credential = GoogleAuthProvider.credentialFromResult(result)
-      if (!credential?.accessToken) throw new Error('Missing Google access token')
-      installAccessToken(credential.accessToken, result.user)
-    },
-    [installAccessToken],
-  )
+  // Keep the ref pointed at the latest installToken so the stable silentRefresh can call it.
+  useEffect(() => {
+    installTokenRef.current = installToken
+  }, [installToken])
 
   useEffect(() => {
     let cancelled = false
@@ -173,12 +234,12 @@ export function useGoogleAuth(): UseGoogleAuthResult {
 
     async function init() {
       try {
-        await Promise.all([initGapi(), setPersistence(auth, browserLocalPersistence)])
+        await Promise.all([initGapi(), initGis(), setPersistence(auth, browserLocalPersistence)])
         if (cancelled) return
 
+        // A rejected Sheets call refreshes the token silently and retries — no popup.
         registerTokenRefresher(async () => {
-          if (!userRef.current) throw new Error('No Firebase user')
-          await getTokenFromPopup(userRef.current)
+          await silentRefresh()
         })
 
         unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -194,16 +255,20 @@ export function useGoogleAuth(): UseGoogleAuthResult {
 
           const profile = toGoogleUser(firebaseUser)
           setUser(profile)
+          setReady(true)
 
           const stored = loadStoredAuth()
           if (stored && stored.user.email === profile.email && isTokenLive(stored)) {
             window.gapi.client.setToken({ access_token: stored.accessToken })
             setAccessToken(stored.accessToken)
-            scheduleTokenExpiry(stored.expiresAt)
+            scheduleTokenRefresh(stored.expiresAt)
           } else {
-            clearToken()
+            // Persisted identity but no live token — recover it silently.
+            silentRefresh().catch((err) => {
+              console.info('[auth] silent token acquisition failed; interactive sign-in needed', err)
+              clearToken()
+            })
           }
-          setReady(true)
         })
       } catch (err) {
         console.error('[auth] init failed', err)
@@ -217,15 +282,34 @@ export function useGoogleAuth(): UseGoogleAuthResult {
       unsubscribe()
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
     }
-  }, [clearToken, getTokenFromPopup, scheduleTokenExpiry, t])
+  }, [clearToken, silentRefresh, scheduleTokenRefresh, t])
 
   const signIn = useCallback(() => {
     setError(null)
-    getTokenFromPopup(userRef.current ?? undefined).catch((err) => {
-      console.warn('[auth] firebase sign-in failed', err)
+    ;(async () => {
+      let firebaseUser = userRef.current
+      if (!firebaseUser) {
+        const result = await signInWithPopup(auth, googleProvider)
+        firebaseUser = result.user
+        userRef.current = firebaseUser
+        // The Firebase popup already granted the Sheets scope — use that token so the
+        // first sign-in stays a single popup. Later refreshes go through GIS silently.
+        const credential = GoogleAuthProvider.credentialFromResult(result)
+        if (credential?.accessToken) {
+          installToken(
+            { token: credential.accessToken, expiresAt: Date.now() + FALLBACK_TTL_MS },
+            toGoogleUser(firebaseUser),
+          )
+          return
+        }
+      }
+      const tokenResult = await requestSheetsToken(true, firebaseUser.email ?? undefined)
+      installToken(tokenResult, toGoogleUser(firebaseUser))
+    })().catch((err) => {
+      console.warn('[auth] sign-in failed', err)
       setError(t('signInFailed'))
     })
-  }, [getTokenFromPopup, t])
+  }, [installToken, t])
 
   const signOut = useCallback(() => {
     firebaseSignOut(auth).catch((err) => console.warn('[auth] firebase sign-out failed', err))

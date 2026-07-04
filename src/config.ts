@@ -7,6 +7,7 @@ function requireEnv(name: keyof ImportMetaEnv): string {
 }
 
 export const config = {
+  googleClientId: requireEnv('VITE_GOOGLE_CLIENT_ID'),
   firebase: {
     apiKey: requireEnv('VITE_FIREBASE_API_KEY'),
     authDomain: requireEnv('VITE_FIREBASE_AUTH_DOMAIN'),

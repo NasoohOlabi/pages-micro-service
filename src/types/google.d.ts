@@ -3,6 +3,38 @@ export {}
 declare global {
   interface Window {
     gapi: GapiNamespace
+    google: GoogleNamespace
+  }
+
+  interface GoogleNamespace {
+    accounts: {
+      oauth2: {
+        initTokenClient(config: TokenClientConfig): TokenClient
+      }
+    }
+  }
+
+  interface TokenClientConfig {
+    client_id: string
+    scope: string
+    callback: (response: TokenResponse) => void
+    error_callback?: (error: TokenError) => void
+  }
+
+  interface TokenResponse {
+    access_token?: string
+    expires_in?: number
+    error?: string
+    error_description?: string
+  }
+
+  interface TokenError {
+    type?: string
+    message?: string
+  }
+
+  interface TokenClient {
+    requestAccessToken(overrideConfig?: { prompt?: string; hint?: string }): void
   }
 }
 
