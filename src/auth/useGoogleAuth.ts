@@ -18,9 +18,11 @@ const GAPI_SRC = 'https://apis.google.com/js/api.js'
 const GIS_SRC = 'https://accounts.google.com/gsi/client'
 const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
 const STORAGE_KEY = 'firebase-google-sheets-auth'
+const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000
 // Google access tokens live ~1h; used only when GIS omits expires_in.
 const FALLBACK_TTL_MS = 55 * 60 * 1000
 const REFRESH_MARGIN_MS = 5 * 60 * 1000
+const REFRESH_RETRY_MS = 60 * 1000
 
 const firebaseApp = initializeApp(config.firebase)
 const auth = getAuth(firebaseApp)
@@ -52,6 +54,7 @@ interface StoredAuth {
   accessToken: string
   user: GoogleUser
   expiresAt: number
+  sessionExpiresAt: number
 }
 
 function loadStoredAuth(): StoredAuth | null {
@@ -60,14 +63,21 @@ function loadStoredAuth(): StoredAuth | null {
     if (!raw) return null
     const stored = JSON.parse(raw) as StoredAuth
     if (!stored.accessToken || !stored.expiresAt || !stored.user?.email) return null
-    return stored
+    return {
+      ...stored,
+      sessionExpiresAt: stored.sessionExpiresAt ?? Date.now() + SESSION_TTL_MS,
+    }
   } catch {
     return null
   }
 }
 
+function isSessionLive(stored: StoredAuth): boolean {
+  return stored.sessionExpiresAt > Date.now()
+}
+
 function isTokenLive(stored: StoredAuth): boolean {
-  return stored.expiresAt - REFRESH_MARGIN_MS > Date.now()
+  return isSessionLive(stored) && stored.expiresAt - REFRESH_MARGIN_MS > Date.now()
 }
 
 function saveStoredAuth(stored: StoredAuth) {
@@ -172,10 +182,13 @@ function requestSheetsToken(interactive: boolean, hint?: string): Promise<TokenR
 export function useGoogleAuth(): UseGoogleAuthResult {
   const { t } = useLocale()
   const [ready, setReady] = useState(false)
-  const [user, setUser] = useState<GoogleUser | null>(() => loadStoredAuth()?.user ?? null)
+  const [user, setUser] = useState<GoogleUser | null>(() => {
+    const stored = loadStoredAuth()
+    return stored && isSessionLive(stored) ? stored.user : null
+  })
   const [accessToken, setAccessToken] = useState<string | null>(() => {
     const stored = loadStoredAuth()
-    return stored && isTokenLive(stored) ? stored.accessToken : null
+    return stored && isSessionLive(stored) ? stored.accessToken : null
   })
   const [error, setError] = useState<string | null>(null)
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -197,6 +210,16 @@ export function useGoogleAuth(): UseGoogleAuthResult {
     installTokenRef.current(result, toGoogleUser(firebaseUser))
   }, [])
 
+  const scheduleSilentRefreshRetry = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+    refreshTimerRef.current = setTimeout(() => {
+      silentRefresh().catch((err) => {
+        console.warn('[auth] silent token refresh retry failed', err)
+        scheduleSilentRefreshRetry()
+      })
+    }, REFRESH_RETRY_MS)
+  }, [silentRefresh])
+
   const scheduleTokenRefresh = useCallback(
     (expiresAt: number) => {
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
@@ -204,11 +227,11 @@ export function useGoogleAuth(): UseGoogleAuthResult {
       refreshTimerRef.current = setTimeout(() => {
         silentRefresh().catch((err) => {
           console.warn('[auth] silent token refresh failed', err)
-          clearToken()
+          scheduleSilentRefreshRetry()
         })
       }, delay)
     },
-    [silentRefresh, clearToken],
+    [silentRefresh, scheduleSilentRefreshRetry],
   )
 
   const installToken = useCallback(
@@ -217,7 +240,12 @@ export function useGoogleAuth(): UseGoogleAuthResult {
       setUser(profile)
       setAccessToken(result.token)
       setError(null)
-      saveStoredAuth({ accessToken: result.token, user: profile, expiresAt: result.expiresAt })
+      saveStoredAuth({
+        accessToken: result.token,
+        user: profile,
+        expiresAt: result.expiresAt,
+        sessionExpiresAt: Date.now() + SESSION_TTL_MS,
+      })
       scheduleTokenRefresh(result.expiresAt)
     },
     [scheduleTokenRefresh],
@@ -258,15 +286,22 @@ export function useGoogleAuth(): UseGoogleAuthResult {
           setReady(true)
 
           const stored = loadStoredAuth()
-          if (stored && stored.user.email === profile.email && isTokenLive(stored)) {
+          if (stored && stored.user.email === profile.email && isSessionLive(stored)) {
             window.gapi.client.setToken({ access_token: stored.accessToken })
             setAccessToken(stored.accessToken)
-            scheduleTokenRefresh(stored.expiresAt)
+            if (isTokenLive(stored)) {
+              scheduleTokenRefresh(stored.expiresAt)
+            } else {
+              silentRefresh().catch((err) => {
+                console.info('[auth] silent token acquisition failed; retrying in background', err)
+                scheduleSilentRefreshRetry()
+              })
+            }
           } else {
             // Persisted identity but no live token — recover it silently.
             silentRefresh().catch((err) => {
-              console.info('[auth] silent token acquisition failed; interactive sign-in needed', err)
-              clearToken()
+              console.info('[auth] silent token acquisition failed; retrying in background', err)
+              scheduleSilentRefreshRetry()
             })
           }
         })
@@ -282,7 +317,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
       unsubscribe()
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
     }
-  }, [clearToken, silentRefresh, scheduleTokenRefresh, t])
+  }, [clearToken, silentRefresh, scheduleTokenRefresh, scheduleSilentRefreshRetry, t])
 
   const signIn = useCallback(() => {
     setError(null)
@@ -303,13 +338,19 @@ export function useGoogleAuth(): UseGoogleAuthResult {
           return
         }
       }
+      try {
+        await silentRefresh()
+        return
+      } catch (err) {
+        console.info('[auth] sign-in silent token recovery failed; requesting consent', err)
+      }
       const tokenResult = await requestSheetsToken(true, firebaseUser.email ?? undefined)
       installToken(tokenResult, toGoogleUser(firebaseUser))
     })().catch((err) => {
       console.warn('[auth] sign-in failed', err)
       setError(t('signInFailed'))
     })
-  }, [installToken, t])
+  }, [installToken, silentRefresh, t])
 
   const signOut = useCallback(() => {
     firebaseSignOut(auth).catch((err) => console.warn('[auth] firebase sign-out failed', err))
