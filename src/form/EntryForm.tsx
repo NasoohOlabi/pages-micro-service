@@ -54,7 +54,7 @@ export function EntryForm({ user, ready }: EntryFormProps) {
     formState: { errors, isSubmitting },
   } = useForm<EntryFormInput, unknown, EntryFormValues>({
     resolver: zodResolver(entrySchema),
-    defaultValues: { student: '', teacher: '', startPage: undefined, endPage: undefined, date: today() },
+    defaultValues: { student: '', teacher: '', startPage: '', endPage: '', date: today() },
   })
 
   const handleStartPageBlur = () => {
@@ -88,8 +88,8 @@ export function EntryForm({ user, ready }: EntryFormProps) {
     reset({
       student: '',
       teacher: values.teacher,
-      startPage: undefined,
-      endPage: undefined,
+      startPage: '',
+      endPage: '',
       date: values.date,
     })
     studentInputRef.current?.focus()
