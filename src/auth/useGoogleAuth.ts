@@ -18,7 +18,6 @@ const GAPI_SRC = 'https://apis.google.com/js/api.js'
 const GIS_SRC = 'https://accounts.google.com/gsi/client'
 const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
 const STORAGE_KEY = 'firebase-google-sheets-auth'
-const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000
 // Google access tokens live ~1h; used only when GIS omits expires_in.
 const FALLBACK_TTL_MS = 55 * 60 * 1000
 const REFRESH_MARGIN_MS = 5 * 60 * 1000
@@ -54,7 +53,6 @@ interface StoredAuth {
   accessToken: string
   user: GoogleUser
   expiresAt: number
-  sessionExpiresAt: number
 }
 
 function loadStoredAuth(): StoredAuth | null {
@@ -63,21 +61,14 @@ function loadStoredAuth(): StoredAuth | null {
     if (!raw) return null
     const stored = JSON.parse(raw) as StoredAuth
     if (!stored.accessToken || !stored.expiresAt || !stored.user?.email) return null
-    return {
-      ...stored,
-      sessionExpiresAt: stored.sessionExpiresAt ?? Date.now() + SESSION_TTL_MS,
-    }
+    return stored
   } catch {
     return null
   }
 }
 
-function isSessionLive(stored: StoredAuth): boolean {
-  return stored.sessionExpiresAt > Date.now()
-}
-
 function isTokenLive(stored: StoredAuth): boolean {
-  return isSessionLive(stored) && stored.expiresAt - REFRESH_MARGIN_MS > Date.now()
+  return stored.expiresAt - REFRESH_MARGIN_MS > Date.now()
 }
 
 function saveStoredAuth(stored: StoredAuth) {
@@ -105,6 +96,10 @@ function loadScript(src: string): Promise<void> {
   const promise = new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`)
     if (existing) {
+      if (existing.dataset.loaded === 'true') {
+        resolve()
+        return
+      }
       existing.addEventListener('load', () => resolve(), { once: true })
       existing.addEventListener('error', () => reject(new Error(`Failed to load script: ${src}`)), {
         once: true,
@@ -116,7 +111,10 @@ function loadScript(src: string): Promise<void> {
     script.src = src
     script.async = true
     script.defer = true
-    script.onload = () => resolve()
+    script.onload = () => {
+      script.dataset.loaded = 'true'
+      resolve()
+    }
     script.onerror = () => reject(new Error(`Failed to load script: ${src}`))
     document.head.appendChild(script)
   })
@@ -136,6 +134,7 @@ async function initGapi() {
 let tokenClient: TokenClient | null = null
 let settleResolve: ((result: TokenResult) => void) | null = null
 let settleReject: ((error: Error) => void) | null = null
+let tokenRequestPromise: Promise<TokenResult> | null = null
 
 function settle(result: TokenResult | null, error?: Error) {
   const resolve = settleResolve
@@ -167,7 +166,9 @@ async function initGis() {
 // interactive=false → `prompt: ''`: reuse the existing Google session with no UI
 // (silent refresh). interactive=true → show consent, needed for the first grant.
 function requestSheetsToken(interactive: boolean, hint?: string): Promise<TokenResult> {
-  return new Promise<TokenResult>((resolve, reject) => {
+  if (!interactive && tokenRequestPromise) return tokenRequestPromise
+
+  const request = new Promise<TokenResult>((resolve, reject) => {
     if (!tokenClient) {
       reject(new Error('GIS token client not ready'))
       return
@@ -177,6 +178,13 @@ function requestSheetsToken(interactive: boolean, hint?: string): Promise<TokenR
     settleReject = reject
     tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '', hint })
   })
+  if (!interactive) {
+    tokenRequestPromise = request.finally(() => {
+      tokenRequestPromise = null
+    })
+    return tokenRequestPromise
+  }
+  return request
 }
 
 export function useGoogleAuth(): UseGoogleAuthResult {
@@ -184,11 +192,11 @@ export function useGoogleAuth(): UseGoogleAuthResult {
   const [ready, setReady] = useState(false)
   const [user, setUser] = useState<GoogleUser | null>(() => {
     const stored = loadStoredAuth()
-    return stored && isSessionLive(stored) ? stored.user : null
+    return stored?.user ?? null
   })
   const [accessToken, setAccessToken] = useState<string | null>(() => {
     const stored = loadStoredAuth()
-    return stored && isSessionLive(stored) ? stored.accessToken : null
+    return stored && isTokenLive(stored) ? stored.accessToken : null
   })
   const [error, setError] = useState<string | null>(null)
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -244,7 +252,6 @@ export function useGoogleAuth(): UseGoogleAuthResult {
         accessToken: result.token,
         user: profile,
         expiresAt: result.expiresAt,
-        sessionExpiresAt: Date.now() + SESSION_TTL_MS,
       })
       scheduleTokenRefresh(result.expiresAt)
     },
@@ -286,12 +293,14 @@ export function useGoogleAuth(): UseGoogleAuthResult {
           setReady(true)
 
           const stored = loadStoredAuth()
-          if (stored && stored.user.email === profile.email && isSessionLive(stored)) {
-            window.gapi.client.setToken({ access_token: stored.accessToken })
-            setAccessToken(stored.accessToken)
+          if (stored && stored.user.email === profile.email) {
             if (isTokenLive(stored)) {
+              window.gapi.client.setToken({ access_token: stored.accessToken })
+              setAccessToken(stored.accessToken)
               scheduleTokenRefresh(stored.expiresAt)
             } else {
+              window.gapi.client.setToken(null)
+              setAccessToken(null)
               silentRefresh().catch((err) => {
                 console.info('[auth] silent token acquisition failed; retrying in background', err)
                 scheduleSilentRefreshRetry()

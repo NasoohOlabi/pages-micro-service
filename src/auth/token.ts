@@ -8,10 +8,21 @@
 type Refresher = () => Promise<void>
 
 let refresher: Refresher | null = null
+let refreshPromise: Promise<void> | null = null
 
 export function registerTokenRefresher(fn: Refresher) {
   console.debug('[auth] token refresher registered')
   refresher = fn
+}
+
+function refreshToken(): Promise<void> {
+  if (!refresher) return Promise.reject(new Error('No token refresher is registered'))
+  if (!refreshPromise) {
+    refreshPromise = refresher().finally(() => {
+      refreshPromise = null
+    })
+  }
+  return refreshPromise
 }
 
 function errorCode(err: unknown): number | undefined {
@@ -46,7 +57,7 @@ export async function withTokenRetry<T>(fn: () => Promise<T>): Promise<T> {
     if (code === 401 && refresher) {
       console.info('[auth] 401 — refreshing token and retrying once')
       try {
-        await refresher()
+        await refreshToken()
       } catch (refreshErr) {
         console.error('[auth] token refresh failed; cannot retry', refreshErr)
         throw err
