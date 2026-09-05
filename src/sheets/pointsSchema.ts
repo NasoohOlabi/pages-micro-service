@@ -52,3 +52,27 @@ export function formValuesToPointsRow(values: PointsFormValues): PointsRowValues
     reason: values.reason,
   }
 }
+
+export function parsePointsRows(raw: string[][]): PointsRowValues[] {
+  const studentIndex = POINTS_COLUMN_ORDER.indexOf('student')
+  const teacherIndex = POINTS_COLUMN_ORDER.indexOf('teacher')
+  const pointsIndex = POINTS_COLUMN_ORDER.indexOf('points')
+  const dateIndex = POINTS_COLUMN_ORDER.indexOf('date')
+  const reasonIndex = POINTS_COLUMN_ORDER.indexOf('reason')
+
+  const parsed: PointsRowValues[] = []
+  for (const row of raw) {
+    const student = (row[studentIndex] ?? '').trim()
+    if (!student) continue
+    const points = Number((row[pointsIndex] ?? '').trim())
+    if (!Number.isFinite(points)) continue
+    parsed.push({
+      student,
+      teacher: (row[teacherIndex] ?? '').trim(),
+      points,
+      date: (row[dateIndex] ?? '').trim(),
+      reason: (row[reasonIndex] ?? '').trim(),
+    })
+  }
+  return parsed
+}

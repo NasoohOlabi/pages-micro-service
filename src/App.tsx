@@ -5,16 +5,31 @@ import { PagesTab } from './form/PagesTab'
 import { PointsForm } from './form/PointsForm'
 import { AttendanceForm } from './form/AttendanceForm'
 import { RosterView } from './form/RosterView'
+import { FinalsView } from './stats/FinalsView'
 import { LanguageSwitcher } from './i18n/LanguageSwitcher'
 import { UserMenu } from './auth/UserMenu'
 import { useLocale } from './i18n/LocaleContext'
+import type { TranslationKey } from './i18n/translations'
 import { PwaUpdateToast } from './PwaUpdateToast'
 
-type AppTab = 'pages' | 'points' | 'attendance' | 'students'
+const APP_TABS = ['pages', 'points', 'attendance', 'students', 'finals'] as const
+type AppTab = (typeof APP_TABS)[number]
+
+const TAB_LABELS = {
+  pages: 'pagesTab',
+  points: 'pointsTab',
+  attendance: 'attendanceTab',
+  students: 'studentsTab',
+  finals: 'finalsTab',
+} as const satisfies Record<AppTab, TranslationKey>
+
+function isAppTab(value: string | null): value is AppTab {
+  return APP_TABS.some((tab) => tab === value)
+}
 
 function readTabFromUrl(): AppTab {
   const tab = new URLSearchParams(window.location.search).get('tab')
-  return tab === 'points' || tab === 'attendance' || tab === 'students' ? tab : 'pages'
+  return isAppTab(tab) ? tab : 'pages'
 }
 
 function App() {
@@ -52,8 +67,8 @@ function App() {
             <SignInButton onClick={signIn} disabled={!ready} />
           ) : (
             <>
-              <div className="grid w-full max-w-2xl grid-cols-2 gap-1 rounded-md border border-gray-200 bg-white p-1 sm:grid-cols-4">
-                {(['pages', 'points', 'attendance', 'students'] as const).map((tab) => (
+              <div className="grid w-full max-w-3xl grid-cols-3 gap-1 rounded-md border border-gray-200 bg-white p-1 sm:grid-cols-5">
+                {APP_TABS.map((tab) => (
                   <button
                     key={tab}
                     type="button"
@@ -65,13 +80,7 @@ function App() {
                         : 'text-gray-600 hover:bg-gray-50'
                     }`}
                   >
-                    {tab === 'pages'
-                      ? t('pagesTab')
-                      : tab === 'points'
-                        ? t('pointsTab')
-                        : tab === 'attendance'
-                          ? t('attendanceTab')
-                          : t('studentsTab')}
+                    {t(TAB_LABELS[tab])}
                   </button>
                 ))}
               </div>
@@ -81,6 +90,8 @@ function App() {
                 <PointsForm user={user} ready={ready} />
               ) : activeTab === 'students' ? (
                 <RosterView ready={ready} />
+              ) : activeTab === 'finals' ? (
+                <FinalsView ready={ready} />
               ) : (
                 <AttendanceForm ready={ready} />
               )}
