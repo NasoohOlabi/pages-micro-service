@@ -6,7 +6,7 @@ import { fetchExistingPointRows } from '../sheets/pointsClient'
 import { fetchRosterNames } from '../sheets/rosterClient'
 import { useLocale } from '../i18n/LocaleContext'
 import { computeFinalsStandings } from './finals'
-import { useQueryState } from '../url/queryState'
+import { useQueryState, type FinalsSort } from '../url/queryState'
 
 interface FinalsViewProps {
   ready: boolean
@@ -25,6 +25,7 @@ export function FinalsView({ ready }: FinalsViewProps) {
   const { t } = useLocale()
   const [state, setQuery] = useQueryState()
   const pageFactor = state.tab === 'finals' ? state.factor : '1'
+  const sort: FinalsSort = state.tab === 'finals' ? state.sort : 'score'
   const [names, setNames] = useState<string[] | null>(null)
   const [pageRows, setPageRows] = useState<SheetRowValues[] | null>(null)
   const [pointRows, setPointRows] = useState<PointsRowValues[] | null>(null)
@@ -59,13 +60,15 @@ export function FinalsView({ ready }: FinalsViewProps) {
 
   const standings = useMemo(() => {
     if (!names || !pageRows || !pointRows) return []
-    return computeFinalsStandings({
+    const rows = computeFinalsStandings({
       names,
       pageRows,
       pointRows,
       pageFactor: parsePageFactor(pageFactor),
     })
-  }, [names, pageFactor, pageRows, pointRows])
+    if (sort !== 'pages') return rows
+    return [...rows].sort((a, b) => b.pages - a.pages || a.name.localeCompare(b.name))
+  }, [names, pageFactor, pageRows, pointRows, sort])
 
   const totals = useMemo(
     () =>
@@ -83,20 +86,40 @@ export function FinalsView({ ready }: FinalsViewProps) {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 p-3 sm:p-6">
-      <div className="flex flex-col gap-1 rounded-md border border-gray-200 bg-white p-3 text-start sm:max-w-xs">
-        <label htmlFor="finals-page-factor" className="text-sm font-medium text-gray-700">
-          {t('finalsPageFactor')}
-        </label>
-        <input
-          id="finals-page-factor"
-          type="number"
-          min={0}
-          step="any"
-          inputMode="decimal"
-          value={pageFactor}
-          onChange={(event) => setQuery({ factor: event.target.value }, 'replace')}
-          className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none"
-        />
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1 rounded-md border border-gray-200 bg-white p-3 text-start sm:max-w-xs">
+          <label htmlFor="finals-page-factor" className="text-sm font-medium text-gray-700">
+            {t('finalsPageFactor')}
+          </label>
+          <input
+            id="finals-page-factor"
+            type="number"
+            min={0}
+            step="any"
+            inputMode="decimal"
+            value={pageFactor}
+            onChange={(event) => setQuery({ factor: event.target.value }, 'replace')}
+            className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none"
+          />
+        </div>
+        <div className="flex flex-col gap-1 rounded-md border border-gray-200 bg-white p-3 text-start">
+          <span className="text-sm font-medium text-gray-700">{t('finalsSort')}</span>
+          <div className="grid grid-cols-2 gap-1">
+            {(['score', 'pages'] as const).map((nextSort) => (
+              <button
+                key={nextSort}
+                type="button"
+                onClick={() => setQuery({ sort: nextSort }, 'replace')}
+                aria-pressed={sort === nextSort}
+                className={`min-h-10 rounded px-3 text-sm font-semibold ${
+                  sort === nextSort ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {t(nextSort === 'score' ? 'finalsScore' : 'finalsPages')}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {loadError && <p className="text-sm text-red-600">{loadError}</p>}

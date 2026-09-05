@@ -22,7 +22,7 @@ Tabs, sub-tabs, and filters live in the query string so a pasted URL restores th
 ?tab=pages&sub=stats&view=coverage&from=2026-08-01&to=2026-08-31&student=Ahmad
 ?tab=attendance&sub=group&date=2026-09-05&group=A
 ?tab=students&q=ahmad
-?tab=finals&factor=1.5
+?tab=finals&factor=1.5&sort=pages
 ```
 
 Owned keys, history rules (`pushState` vs `replaceState`), and what stays in React are in [docs/url-state.md](docs/url-state.md). Agents: that file is also in [AGENTS.md](AGENTS.md).

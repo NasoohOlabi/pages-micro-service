@@ -4,6 +4,7 @@ export const APP_TABS = ['pages', 'points', 'attendance', 'students', 'finals'] 
 export type AppTab = (typeof APP_TABS)[number]
 
 export type StatsView = 'students' | 'time' | 'teachers' | 'coverage'
+export type FinalsSort = 'score' | 'pages'
 export type HistoryMode = 'push' | 'replace'
 
 export type QueryState =
@@ -14,7 +15,7 @@ export type QueryState =
   | { tab: 'attendance'; sub: 'group'; date: string; group: string }
   | { tab: 'students'; sub: 'list'; q: string }
   | { tab: 'students'; sub: 'add'; q: string }
-  | { tab: 'finals'; factor: string }
+  | { tab: 'finals'; factor: string; sort: FinalsSort }
 
 export type QueryPatch = {
   tab?: AppTab
@@ -27,6 +28,7 @@ export type QueryPatch = {
   group?: string
   q?: string
   factor?: string
+  sort?: FinalsSort
 }
 
 const DEFAULT_PAGES: QueryState = { tab: 'pages', sub: 'log' }
@@ -78,7 +80,7 @@ function defaultsFor(tab: AppTab): QueryState {
     case 'students':
       return { tab: 'students', sub: 'list', q: '' }
     case 'finals':
-      return { tab: 'finals', factor: '1' }
+      return { tab: 'finals', factor: '1', sort: 'score' }
     default: {
       const _exhaustive: never = tab
       return _exhaustive
@@ -119,7 +121,11 @@ export function parseQueryState(search: string): QueryState {
 
   if (tab === 'finals') {
     const factor = params.get('factor')
-    return { tab: 'finals', factor: factor ? factor : '1' }
+    return {
+      tab: 'finals',
+      factor: factor ? factor : '1',
+      sort: params.get('sort') === 'pages' ? 'pages' : 'score',
+    }
   }
 
   if (sub === 'stats') {
@@ -172,6 +178,7 @@ export function hrefFor(state: QueryState): string {
       break
     case 'finals':
       if (state.factor !== '1') params.set('factor', state.factor)
+      if (state.sort !== 'score') params.set('sort', state.sort)
       break
     default: {
       const _exhaustive: never = state
@@ -236,7 +243,11 @@ function withFields(state: QueryState, patch: QueryPatch): QueryState {
   }
 
   if (state.tab === 'finals') {
-    return { tab: 'finals', factor: patch.factor ?? state.factor }
+    return {
+      tab: 'finals',
+      factor: patch.factor ?? state.factor,
+      sort: patch.sort ?? state.sort,
+    }
   }
 
   return state
