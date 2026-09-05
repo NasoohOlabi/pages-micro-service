@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { useGoogleAuth } from './auth/useGoogleAuth'
 import { SignInButton } from './auth/SignInButton'
 import { PagesTab } from './form/PagesTab'
@@ -11,9 +10,7 @@ import { UserMenu } from './auth/UserMenu'
 import { useLocale } from './i18n/LocaleContext'
 import type { TranslationKey } from './i18n/translations'
 import { PwaUpdateToast } from './PwaUpdateToast'
-
-const APP_TABS = ['pages', 'points', 'attendance', 'students', 'finals'] as const
-type AppTab = (typeof APP_TABS)[number]
+import { APP_TABS, type AppTab, useQueryState } from './url/queryState'
 
 const TAB_LABELS = {
   pages: 'pagesTab',
@@ -23,31 +20,14 @@ const TAB_LABELS = {
   finals: 'finalsTab',
 } as const satisfies Record<AppTab, TranslationKey>
 
-function isAppTab(value: string | null): value is AppTab {
-  return APP_TABS.some((tab) => tab === value)
-}
-
-function readTabFromUrl(): AppTab {
-  const tab = new URLSearchParams(window.location.search).get('tab')
-  return isAppTab(tab) ? tab : 'pages'
-}
-
 function App() {
   const { ready, user, accessToken, error, signIn, signOut } = useGoogleAuth()
   const { t } = useLocale()
-  const [activeTab, setActiveTab] = useState<AppTab>(readTabFromUrl)
-
-  useEffect(() => {
-    const handlePopState = () => setActiveTab(readTabFromUrl())
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [])
+  const [state, setQuery] = useQueryState()
+  const activeTab = state.tab
 
   const selectTab = (tab: AppTab) => {
-    const url = new URL(window.location.href)
-    url.searchParams.set('tab', tab)
-    window.history.pushState(null, '', url)
-    setActiveTab(tab)
+    setQuery({ tab }, 'push')
   }
 
   return (

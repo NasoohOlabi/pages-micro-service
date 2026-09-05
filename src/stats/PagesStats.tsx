@@ -18,12 +18,12 @@ import {
   type NamedCount,
   type TimeSeries,
 } from './aggregations'
+import { useQueryState, type StatsView } from '../url/queryState'
 
 interface PagesStatsProps {
   ready: boolean
 }
 
-type StatsView = 'students' | 'time' | 'teachers' | 'coverage'
 type DatePreset = 'week' | 'month' | 'all'
 
 const LIST_CAP = 20
@@ -34,15 +34,6 @@ const VIEW_KEYS: Record<StatsView, TranslationKey> = {
   time: 'statsViewTime',
   teachers: 'statsViewTeachers',
   coverage: 'statsViewCoverage',
-}
-
-function isStatsView(value: string | null): value is StatsView {
-  return value === 'students' || value === 'time' || value === 'teachers' || value === 'coverage'
-}
-
-function readViewFromUrl(): StatsView {
-  const view = new URLSearchParams(window.location.search).get('view')
-  return isStatsView(view) ? view : 'students'
 }
 
 function rangeForPreset(preset: DatePreset, today = localIsoDate()): { from: string | null; to: string | null } {
@@ -72,26 +63,16 @@ function formatIsoDate(iso: string, locale: Locale): string {
 
 export function PagesStats({ ready }: PagesStatsProps) {
   const { locale, t } = useLocale()
-  const [view, setView] = useState<StatsView>(readViewFromUrl)
-  const [from, setFrom] = useState<string | null>(() => rangeForPreset('month').from)
-  const [to, setTo] = useState<string | null>(() => rangeForPreset('month').to)
-  const [student, setStudent] = useState('')
+  const [state, setQuery] = useQueryState()
+  const view = state.tab === 'pages' && state.sub === 'stats' ? state.view : 'students'
+  const from = state.tab === 'pages' && state.sub === 'stats' ? state.from : null
+  const to = state.tab === 'pages' && state.sub === 'stats' ? state.to : null
+  const student = state.tab === 'pages' && state.sub === 'stats' ? state.student : ''
   const [rows, setRows] = useState<SheetRowValues[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const [selectedBucket, setSelectedBucket] = useState<string | null>(null)
-
-  useEffect(() => {
-    const url = new URL(window.location.href)
-    if (!url.searchParams.get('view')) {
-      url.searchParams.set('view', 'students')
-      window.history.replaceState(null, '', url)
-    }
-    const handlePopState = () => setView(readViewFromUrl())
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [])
 
   useEffect(() => {
     if (!ready) return
@@ -148,17 +129,9 @@ export function PagesStats({ ready }: PagesStatsProps) {
     })
   }, [timeSeries])
 
-  const selectView = (nextView: StatsView) => {
-    const url = new URL(window.location.href)
-    url.searchParams.set('view', nextView)
-    window.history.pushState(null, '', url)
-    setView(nextView)
-  }
-
   const applyPreset = (preset: DatePreset) => {
     const range = rangeForPreset(preset)
-    setFrom(range.from)
-    setTo(range.to)
+    setQuery({ from: range.from, to: range.to }, 'replace')
   }
 
   const selectedTime = timeSeries.buckets.find((bucket) => bucket.key === selectedBucket)
@@ -196,7 +169,7 @@ export function PagesStats({ ready }: PagesStatsProps) {
               type="date"
               value={from ?? ''}
               max={to ?? undefined}
-              onChange={(event) => setFrom(event.target.value || null)}
+              onChange={(event) => setQuery({ from: event.target.value || null }, 'replace')}
               className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none"
             />
           </div>
@@ -209,7 +182,7 @@ export function PagesStats({ ready }: PagesStatsProps) {
               type="date"
               value={to ?? ''}
               min={from ?? undefined}
-              onChange={(event) => setTo(event.target.value || null)}
+              onChange={(event) => setQuery({ to: event.target.value || null }, 'replace')}
               className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none"
             />
           </div>
@@ -220,7 +193,7 @@ export function PagesStats({ ready }: PagesStatsProps) {
             <select
               id="stats-student"
               value={student}
-              onChange={(event) => setStudent(event.target.value)}
+              onChange={(event) => setQuery({ student: event.target.value }, 'replace')}
               className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none"
             >
               <option value="">{t('statsAllStudents')}</option>
@@ -254,7 +227,7 @@ export function PagesStats({ ready }: PagesStatsProps) {
               <button
                 key={nextView}
                 type="button"
-                onClick={() => selectView(nextView)}
+                onClick={() => setQuery({ view: nextView }, 'replace')}
                 aria-current={view === nextView ? 'page' : undefined}
                 className={`min-h-10 rounded px-3 text-sm font-semibold ${
                   view === nextView ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50'

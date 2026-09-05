@@ -14,6 +14,19 @@ A small React + TypeScript app for logging which Quran page each student has rec
 
 Package manager is **bun** — use `bun`, not `npm`/`yarn`/`pnpm`.
 
+## Deep links
+
+Tabs, sub-tabs, and filters live in the query string so a pasted URL restores the same screen. There is no client router.
+
+```
+?tab=pages&sub=stats&view=coverage&from=2026-08-01&to=2026-08-31&student=Ahmad
+?tab=attendance&sub=group&date=2026-09-05&group=A
+?tab=students&q=ahmad
+?tab=finals&factor=1.5
+```
+
+Owned keys, history rules (`pushState` vs `replaceState`), and what stays in React are in [docs/url-state.md](docs/url-state.md). Agents: that file is also in [AGENTS.md](AGENTS.md).
+
 ## Setup
 
 ```sh

@@ -6,6 +6,7 @@ import { fetchExistingPointRows } from '../sheets/pointsClient'
 import { fetchRosterNames } from '../sheets/rosterClient'
 import { useLocale } from '../i18n/LocaleContext'
 import { computeFinalsStandings } from './finals'
+import { useQueryState } from '../url/queryState'
 
 interface FinalsViewProps {
   ready: boolean
@@ -22,7 +23,8 @@ function formatScore(score: number): string {
 
 export function FinalsView({ ready }: FinalsViewProps) {
   const { t } = useLocale()
-  const [pageFactor, setPageFactor] = useState('1')
+  const [state, setQuery] = useQueryState()
+  const pageFactor = state.tab === 'finals' ? state.factor : '1'
   const [names, setNames] = useState<string[] | null>(null)
   const [pageRows, setPageRows] = useState<SheetRowValues[] | null>(null)
   const [pointRows, setPointRows] = useState<PointsRowValues[] | null>(null)
@@ -92,7 +94,7 @@ export function FinalsView({ ready }: FinalsViewProps) {
           step="any"
           inputMode="decimal"
           value={pageFactor}
-          onChange={(event) => setPageFactor(event.target.value)}
+          onChange={(event) => setQuery({ factor: event.target.value }, 'replace')}
           className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none"
         />
       </div>

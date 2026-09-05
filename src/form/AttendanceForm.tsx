@@ -16,6 +16,7 @@ import { StudentAutocomplete } from './StudentAutocomplete'
 import { DateLabel } from './DateLabel'
 import { useLocale } from '../i18n/LocaleContext'
 import type { TranslationKey } from '../i18n/translations'
+import { useQueryState } from '../url/queryState'
 
 interface AttendanceFormProps {
   ready: boolean
@@ -24,25 +25,6 @@ interface AttendanceFormProps {
 type AttendanceMode = 'student' | 'group'
 
 const DEFAULT_STATUS: AttendanceStatus = 'غائب'
-
-const DATE_STORAGE_KEY = 'attendance-date'
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function readStoredDate(): string {
-  try {
-    return sessionStorage.getItem(DATE_STORAGE_KEY) || today()
-  } catch {
-    return today()
-  }
-}
-
-function readSubTabFromUrl(): AttendanceMode {
-  const sub = new URLSearchParams(window.location.search).get('sub')
-  return sub === 'group' ? 'group' : 'student'
-}
 
 function StatusSelect({
   value,
@@ -83,14 +65,15 @@ function StatusSelect({
 
 export function AttendanceForm({ ready }: AttendanceFormProps) {
   const { t } = useLocale()
-  const [mode, setMode] = useState<AttendanceMode>(readSubTabFromUrl)
-  const [date, setDate] = useState(readStoredDate)
+  const [state, setQuery] = useQueryState()
+  const mode: AttendanceMode = state.tab === 'attendance' && state.sub === 'group' ? 'group' : 'student'
+  const date = state.tab === 'attendance' ? state.date : ''
+  const group = state.tab === 'attendance' && state.sub === 'group' ? state.group : ''
   const [sheet, setSheet] = useState<AttendanceSheet | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [studentQuery, setStudentQuery] = useState('')
   const [selectedStudents, setSelectedStudents] = useState<string[]>([])
   const [studentStatus, setStudentStatus] = useState<AttendanceStatus>(DEFAULT_STATUS)
-  const [group, setGroup] = useState('')
   const [groupStatuses, setGroupStatuses] = useState<Record<number, AttendanceStatus>>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -98,35 +81,9 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
   const studentInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (!params.has('sub')) {
-      params.set('sub', mode)
-      const url = new URL(window.location.href)
-      url.search = params.toString()
-      window.history.replaceState(null, '', url)
-    }
-    const handlePopState = () => setMode(readSubTabFromUrl())
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(DATE_STORAGE_KEY, date)
-    } catch {
-      // ignore storage failures (e.g. private browsing)
-    }
-  }, [date])
-
-  const selectMode = (nextMode: AttendanceMode) => {
-    const url = new URL(window.location.href)
-    url.searchParams.set('sub', nextMode)
-    window.history.pushState(null, '', url)
-    setMode(nextMode)
-    setSubmitError(null)
-    setSuccessMessage(null)
-  }
+    if (state.tab !== 'attendance' || state.sub !== 'group' || state.group || !sheet?.groups[0]) return
+    setQuery({ group: sheet.groups[0] }, 'replace')
+  }, [setQuery, sheet, state])
 
   useEffect(() => {
     if (!ready) return
@@ -136,7 +93,6 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
         if (cancelled) return
         setSheet(result)
         setLoadError(null)
-        setGroup((current) => current || result.groups[0] || '')
       })
       .catch((err) => {
         if (cancelled) return
@@ -256,7 +212,11 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
           <button
             key={nextMode}
             type="button"
-            onClick={() => selectMode(nextMode)}
+            onClick={() => {
+              setQuery({ sub: nextMode }, 'push')
+              setSubmitError(null)
+              setSuccessMessage(null)
+            }}
             aria-current={mode === nextMode ? 'page' : undefined}
             className={`min-h-10 rounded px-3 text-sm font-semibold ${
               mode === nextMode
@@ -315,7 +275,7 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
               type="date"
               required
               value={date}
-              onChange={(event) => setDate(event.target.value)}
+              onChange={(event) => setQuery({ date: event.target.value }, 'replace')}
               className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none sm:py-3"
             />
           </div>
@@ -356,7 +316,7 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
                 type="date"
                 required
                 value={date}
-                onChange={(event) => setDate(event.target.value)}
+                onChange={(event) => setQuery({ date: event.target.value }, 'replace')}
                 className="rounded-md border border-gray-300 px-3 py-3 text-base focus:border-indigo-500 focus:outline-none"
               />
             </div>
@@ -368,7 +328,7 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
               <select
                 id="attendance-group"
                 value={group}
-                onChange={(event) => setGroup(event.target.value)}
+                onChange={(event) => setQuery({ group: event.target.value }, 'replace')}
                 className="rounded-md border border-gray-300 px-3 py-3 text-base focus:border-indigo-500 focus:outline-none"
               >
                 {sheet?.groups.map((groupName) => (

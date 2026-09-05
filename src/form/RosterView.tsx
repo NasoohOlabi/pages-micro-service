@@ -12,6 +12,7 @@ import {
 import { SheetsAccessError } from '../sheets/sheetsClient'
 import { useLocale } from '../i18n/LocaleContext'
 import type { Locale, TranslationKey } from '../i18n/translations'
+import { useQueryState } from '../url/queryState'
 
 interface RosterViewProps {
   ready: boolean
@@ -30,17 +31,11 @@ const ROSTER_COLUMN_LABELS: Partial<Record<number, TranslationKey>> = {
 }
 const ROSTER_TABLE_COLUMNS = [1, 2, 3, 7, 8]
 
-type RosterMode = 'list' | 'add'
-
 const DATE_HEADER_PATTERN = /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s+\d{1,2}\/\d{1,2}$/i
 const SKIPPED_FORM_HEADERS = new Set(['attendance', 'classified', 'attendance %', 'الحضور', 'مصنف', 'نسبة الحضور'])
 
 function normalize(value: string | undefined): string {
   return (value ?? '').trim().toLowerCase()
-}
-
-function readRosterModeFromUrl(): RosterMode {
-  return new URLSearchParams(window.location.search).get('sub') === 'add' ? 'add' : 'list'
 }
 
 function hasNonAscii(value: string | undefined): boolean {
@@ -61,9 +56,10 @@ function rosterColumnLabel(
 
 export function RosterView({ ready }: RosterViewProps) {
   const { locale, t } = useLocale()
-  const [mode, setMode] = useState<RosterMode>(readRosterModeFromUrl)
+  const [state, setQuery] = useQueryState()
+  const mode = state.tab === 'students' && state.sub === 'add' ? 'add' : 'list'
+  const query = state.tab === 'students' ? state.q : ''
   const [sheet, setSheet] = useState<RosterSheet | null>(null)
-  const [query, setQuery] = useState('')
   const [formValues, setFormValues] = useState<Record<number, string>>({})
   const [loadError, setLoadError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -74,12 +70,6 @@ export function RosterView({ ready }: RosterViewProps) {
   const [historyByStudent, setHistoryByStudent] = useState<
     Record<string, AttendanceHistoryEntry[] | 'loading' | 'error'>
   >({})
-
-  useEffect(() => {
-    const handlePopState = () => setMode(readRosterModeFromUrl())
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [])
 
   useEffect(() => {
     if (!ready) return
@@ -138,15 +128,8 @@ export function RosterView({ ready }: RosterViewProps) {
     return Array.from(new Set([sheet.nameColumnIndex, ...ROSTER_TABLE_COLUMNS]))
   }, [sheet])
 
-  const selectMode = (nextMode: RosterMode) => {
-    const url = new URL(window.location.href)
-    if (nextMode === 'add') {
-      url.searchParams.set('sub', 'add')
-    } else {
-      url.searchParams.delete('sub')
-    }
-    window.history.pushState(null, '', url)
-    setMode(nextMode)
+  const selectMode = (nextMode: 'list' | 'add') => {
+    setQuery({ sub: nextMode }, 'push')
     setSubmitError(null)
     setSuccessMessage(null)
   }
@@ -200,10 +183,7 @@ export function RosterView({ ready }: RosterViewProps) {
       setSheet(nextSheet)
       setFormValues({})
       setSuccessMessage(t('studentCreated', { student: studentName }))
-      const url = new URL(window.location.href)
-      url.searchParams.delete('sub')
-      window.history.pushState(null, '', url)
-      setMode('list')
+      setQuery({ sub: 'list' }, 'push')
     } catch (err) {
       setSubmitError(
         err instanceof SheetsAccessError ? err.message : t('rosterCreateError'),
@@ -272,7 +252,7 @@ export function RosterView({ ready }: RosterViewProps) {
                 id="roster-search"
                 type="search"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => setQuery({ q: event.target.value }, 'replace')}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none sm:py-3"
               />
             </div>

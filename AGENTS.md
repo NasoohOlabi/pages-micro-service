@@ -20,9 +20,11 @@ There is no test suite. Treat `bun run build` (type-check) and `bun run lint` as
 
 - [src/auth/](src/auth/) — Google sign-in (`useGoogleAuth` loads GIS + gapi scripts, manages the access token and user profile)
 - [src/sheets/](src/sheets/) — Sheets API access: [sheetsClient.ts](src/sheets/sheetsClient.ts) (append/read the log sheet, dedupe), [rosterClient.ts](src/sheets/rosterClient.ts) (fetch student names for autocomplete), [schema.ts](src/sheets/schema.ts) (zod schema + column order — must match `VITE_SHEET_RANGE`)
-- [src/form/](src/form/) — the entry form: [EntryForm.tsx](src/form/EntryForm.tsx), [StudentAutocomplete.tsx](src/form/StudentAutocomplete.tsx) (fuse.js fuzzy search), [fields.ts](src/form/fields.ts) (field metadata)
+- [src/form/](src/form/) — screens that write data: [PagesTab.tsx](src/form/PagesTab.tsx) (log vs stats), [EntryForm.tsx](src/form/EntryForm.tsx), [PointsForm.tsx](src/form/PointsForm.tsx), [AttendanceForm.tsx](src/form/AttendanceForm.tsx), [RosterView.tsx](src/form/RosterView.tsx)
+- [src/stats/](src/stats/) — read-only views: [PagesStats.tsx](src/stats/PagesStats.tsx), [FinalsView.tsx](src/stats/FinalsView.tsx)
+- [src/url/](src/url/) — query state ([queryState.ts](src/url/queryState.ts) / `useQueryState`). The only module that touches `history` / `location.search` for view state.
 - [src/config.ts](src/config.ts) — reads/validates `VITE_*` env vars; throws on startup if any are missing
-- [src/App.tsx](src/App.tsx) — top-level sign-in / form switch
+- [src/App.tsx](src/App.tsx) — sign-in and the top-level tab switch (`tab` query param)
 
 ## Conventions
 
@@ -33,6 +35,7 @@ There is no test suite. Treat `bun run build` (type-check) and `bun run lint` as
 - `COLUMN_ORDER` in [schema.ts](src/sheets/schema.ts) must stay in sync with the actual sheet columns and `VITE_SHEET_RANGE` — if you add/reorder a form field that maps to a sheet column, update both.
 - Comments are rare and only used to explain non-obvious *why* (e.g. the column-order/range coupling, the roster-cache lifetime). Don't add explanatory comments for self-evident code.
 - Env vars are accessed only through [src/config.ts](src/config.ts), never `import.meta.env` directly in components.
+- Query state — tabs, sub-tabs, filters, dates, search, and chart views live in the query string. Read [docs/url-state.md](docs/url-state.md) before adding a tab, filter, or `useState` that decides what the screen shows.
 
 ## Environment
 
