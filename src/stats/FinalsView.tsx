@@ -65,6 +65,18 @@ export function FinalsView({ ready }: FinalsViewProps) {
     })
   }, [names, pageFactor, pageRows, pointRows])
 
+  const totals = useMemo(
+    () =>
+      standings.reduce(
+        (acc, row) => ({
+          pages: acc.pages + row.pages,
+          score: acc.score + row.score,
+        }),
+        { pages: 0, score: 0 },
+      ),
+    [standings],
+  )
+
   const loaded = names !== null && pageRows !== null && pointRows !== null
 
   return (
@@ -133,6 +145,22 @@ export function FinalsView({ ready }: FinalsViewProps) {
                 ))
               )}
             </tbody>
+            {standings.length > 0 && (
+              <tfoot className="sticky bottom-0 bg-gray-50">
+                <tr>
+                  <td className="border-t border-gray-200 px-3 py-2" />
+                  <td className="border-t border-gray-200 px-3 py-2 text-start font-semibold text-gray-900">
+                    {t('finalsTotal')}
+                  </td>
+                  <td className="border-t border-gray-200 px-3 py-2 text-end tabular-nums font-semibold text-gray-900">
+                    {totals.pages}
+                  </td>
+                  <td className="border-t border-gray-200 px-3 py-2 text-end tabular-nums font-semibold text-gray-900">
+                    {formatScore(totals.score)}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       )}
