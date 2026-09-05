@@ -121,10 +121,12 @@ export function uniqueStudentNames(rows: SheetRowValues[]): string[] {
   return [...names].sort((a, b) => a.localeCompare(b))
 }
 
-export function uniquePageSet(rows: SheetRowValues[]): Set<number> {
-  const pages = new Set<number>()
-  for (const row of rows) pages.add(row.page)
-  return pages
+export function countByPage(rows: SheetRowValues[]): Map<number, number> {
+  const counts = new Map<number, number>()
+  for (const row of rows) {
+    counts.set(row.page, (counts.get(row.page) ?? 0) + 1)
+  }
+  return counts
 }
 
 export function countByField(rows: SheetRowValues[], field: 'student' | 'teacher'): NamedCount[] {

@@ -116,6 +116,9 @@ export const translations = {
     statsJuz: 'Juz {{n}}',
     statsWeekOf: 'Week of {{date}}',
     statsSelectedBar: '{{label}}: {{count}}',
+    statsCoverageCell: 'Page {{page}}, {{count}} times',
+    statsCoverageFew: 'Few',
+    statsCoverageMost: 'Most',
   },
   ar: {
     attendanceTab: 'الحضور',
@@ -228,6 +231,9 @@ export const translations = {
     statsJuz: 'الجزء {{n}}',
     statsWeekOf: 'أسبوع {{date}}',
     statsSelectedBar: '{{label}}: {{count}}',
+    statsCoverageCell: 'صفحة {{page}}، {{count}} مرة',
+    statsCoverageFew: 'قليل',
+    statsCoverageMost: 'الأكثر',
   },
 } as const satisfies Record<Locale, Record<string, string>>
 

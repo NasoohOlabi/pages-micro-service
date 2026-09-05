@@ -6,6 +6,7 @@ import type { Locale, TranslationKey } from '../i18n/translations'
 import {
   buildTimeSeries,
   countByField,
+  countByPage,
   countPagesInCurrentWeek,
   filterRows,
   juzPageRanges,
@@ -13,7 +14,6 @@ import {
   QURAN_PAGES,
   startOfIsoWeek,
   startOfMonth,
-  uniquePageSet,
   uniqueStudentNames,
   type NamedCount,
   type TimeSeries,
@@ -128,7 +128,7 @@ export function PagesStats({ ready }: PagesStatsProps) {
     })
   }, [from, rows, student, to])
 
-  const uniquePages = useMemo(() => uniquePageSet(filtered), [filtered])
+  const pageCounts = useMemo(() => countByPage(filtered), [filtered])
   const studentCounts = useMemo(() => countByField(filtered, 'student'), [filtered])
   const teacherCounts = useMemo(() => countByField(filtered, 'teacher'), [filtered])
   const timeSeries = useMemo(() => buildTimeSeries(filtered, { from, to }), [filtered, from, to])
@@ -243,7 +243,7 @@ export function PagesStats({ ready }: PagesStatsProps) {
             <KpiCard label={t('statsTotalPages')} value={filtered.length} />
             <KpiCard
               label={t('statsUniquePages')}
-              value={<span dir="ltr">{uniquePages.size} / {QURAN_PAGES}</span>}
+              value={<span dir="ltr">{pageCounts.size} / {QURAN_PAGES}</span>}
             />
             {!student && <KpiCard label={t('statsUniqueStudents')} value={uniqueStudents} />}
             <KpiCard label={t('statsPagesThisWeek')} value={pagesThisWeek} />
@@ -294,7 +294,7 @@ export function PagesStats({ ready }: PagesStatsProps) {
                 selected={selectedTime}
               />
             ) : (
-              <CoverageGrid pages={uniquePages} t={t} />
+              <CoverageGrid counts={pageCounts} t={t} />
             )}
           </div>
         </>
@@ -420,35 +420,66 @@ function TimeChart({
   )
 }
 
+const HEAT_LIGHT = { r: 191, g: 219, b: 254 }
+const HEAT_DARK = { r: 30, g: 64, b: 175 }
+
+function heatColor(count: number, max: number): string | undefined {
+  if (count <= 0 || max <= 0) return undefined
+  const t = count / max
+  const r = Math.round(HEAT_LIGHT.r + (HEAT_DARK.r - HEAT_LIGHT.r) * t)
+  const g = Math.round(HEAT_LIGHT.g + (HEAT_DARK.g - HEAT_LIGHT.g) * t)
+  const b = Math.round(HEAT_LIGHT.b + (HEAT_DARK.b - HEAT_LIGHT.b) * t)
+  return `rgb(${r} ${g} ${b})`
+}
+
 function CoverageGrid({
-  pages,
+  counts,
   t,
 }: {
-  pages: Set<number>
+  counts: Map<number, number>
   t: (key: TranslationKey, params?: Record<string, string | number>) => string
 }) {
+  let max = 0
+  for (const count of counts.values()) {
+    if (count > max) max = count
+  }
+
   return (
-    <div className="flex flex-col gap-1 overflow-auto">
-      {JUZ_RANGES.map((range) => (
-        <div key={range.juz} className="flex items-center gap-2">
-          <span className="w-16 shrink-0 text-xs text-gray-500">
-            {t('statsJuz', { n: range.juz })}
-          </span>
-          <div className="flex flex-wrap gap-px">
-            {Array.from({ length: range.end - range.start + 1 }, (_, index) => {
-              const page = range.start + index
-              const filled = pages.has(page)
-              return (
-                <span
-                  key={page}
-                  title={String(page)}
-                  className={`h-2.5 w-2.5 ${filled ? 'bg-indigo-600' : 'bg-gray-200'}`}
-                />
-              )
-            })}
+    <div className="flex flex-col gap-2 overflow-auto">
+      <div className="flex items-center gap-2 self-start text-xs text-gray-500">
+        <span>{t('statsCoverageFew')}</span>
+        <span
+          className="h-2.5 w-16 rounded-sm"
+          style={{
+            background: `linear-gradient(to inline-end, rgb(${HEAT_LIGHT.r} ${HEAT_LIGHT.g} ${HEAT_LIGHT.b}), rgb(${HEAT_DARK.r} ${HEAT_DARK.g} ${HEAT_DARK.b}))`,
+          }}
+        />
+        <span>{t('statsCoverageMost')}</span>
+      </div>
+      <div className="flex flex-col gap-1">
+        {JUZ_RANGES.map((range) => (
+          <div key={range.juz} className="flex items-center gap-2">
+            <span className="w-16 shrink-0 text-xs text-gray-500">
+              {t('statsJuz', { n: range.juz })}
+            </span>
+            <div className="flex flex-wrap gap-px">
+              {Array.from({ length: range.end - range.start + 1 }, (_, index) => {
+                const page = range.start + index
+                const count = counts.get(page) ?? 0
+                const color = heatColor(count, max)
+                return (
+                  <span
+                    key={page}
+                    title={t('statsCoverageCell', { page, count })}
+                    className={color ? 'h-2.5 w-2.5' : 'h-2.5 w-2.5 bg-gray-200'}
+                    style={color ? { backgroundColor: color } : undefined}
+                  />
+                )
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }
