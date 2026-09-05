@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useGoogleAuth } from './auth/useGoogleAuth'
 import { SignInButton } from './auth/SignInButton'
-import { EntryForm } from './form/EntryForm'
+import { PagesTab } from './form/PagesTab'
 import { PointsForm } from './form/PointsForm'
 import { AttendanceForm } from './form/AttendanceForm'
 import { RosterView } from './form/RosterView'
@@ -76,7 +76,7 @@ function App() {
                 ))}
               </div>
               {activeTab === 'pages' ? (
-                <EntryForm user={user} ready={ready} />
+                <PagesTab user={user} ready={ready} />
               ) : activeTab === 'points' ? (
                 <PointsForm user={user} ready={ready} />
               ) : activeTab === 'students' ? (

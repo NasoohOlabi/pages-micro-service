@@ -52,3 +52,25 @@ export function expandPageRange(values: EntryFormValues): SheetRowValues[] {
   }
   return rows
 }
+
+export function parseSheetRows(raw: string[][]): SheetRowValues[] {
+  const studentIndex = COLUMN_ORDER.indexOf('student')
+  const teacherIndex = COLUMN_ORDER.indexOf('teacher')
+  const pageIndex = COLUMN_ORDER.indexOf('page')
+  const dateIndex = COLUMN_ORDER.indexOf('date')
+
+  const parsed: SheetRowValues[] = []
+  for (const row of raw) {
+    const student = (row[studentIndex] ?? '').trim()
+    if (!student) continue
+    const page = Number((row[pageIndex] ?? '').trim())
+    if (!Number.isInteger(page) || page < 1 || page > 604) continue
+    parsed.push({
+      student,
+      teacher: (row[teacherIndex] ?? '').trim(),
+      page,
+      date: (row[dateIndex] ?? '').trim(),
+    })
+  }
+  return parsed
+}
