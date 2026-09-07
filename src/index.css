@@ -3,3 +3,13 @@
 @theme {
   --font-sans: "Space Grotesk", "Noto Kufi Arabic", ui-sans-serif, system-ui, sans-serif;
 }
+
+@media print {
+  @page {
+    margin: 16mm;
+  }
+
+  tr {
+    break-inside: avoid;
+  }
+}

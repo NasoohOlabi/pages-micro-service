@@ -14,7 +14,7 @@ export function PwaUpdateToast() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed right-3 bottom-3 left-3 z-50 mx-auto flex max-w-md items-center justify-between gap-3 rounded-md border border-gray-200 bg-white p-3 text-sm shadow-lg sm:right-4 sm:left-auto"
+      className="fixed right-3 bottom-3 left-3 z-50 mx-auto flex max-w-md items-center justify-between gap-3 rounded-md border border-gray-200 bg-white p-3 text-sm shadow-lg sm:right-4 sm:left-auto print:hidden"
     >
       <p className="font-medium text-gray-900">{t('pwaUpdateAvailable')}</p>
       <div className="flex shrink-0 items-center gap-2">

@@ -85,8 +85,18 @@ export function FinalsView({ ready }: FinalsViewProps) {
   const loaded = names !== null && pageRows !== null && pointRows !== null
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 p-3 sm:p-6">
-      <div className="flex flex-wrap items-end gap-3">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 p-3 sm:p-6 print:max-w-none print:gap-2 print:p-0">
+      <div className="hidden text-start print:block">
+        <h1 className="text-xl font-semibold text-gray-900">
+          {t('appTitle')} — {t('finalsTab')}
+        </h1>
+        <p className="mt-1 text-sm text-gray-600">
+          {t('finalsPageFactor')}: {pageFactor}
+          {' · '}
+          {t('finalsSort')}: {t(sort === 'score' ? 'finalsScore' : 'finalsPages')}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-end gap-3 print:hidden">
         <div className="flex flex-col gap-1 rounded-md border border-gray-200 bg-white p-3 text-start sm:max-w-xs">
           <label htmlFor="finals-page-factor" className="text-sm font-medium text-gray-700">
             {t('finalsPageFactor')}
@@ -120,15 +130,23 @@ export function FinalsView({ ready }: FinalsViewProps) {
             ))}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => window.print()}
+          disabled={!loaded || standings.length === 0}
+          className="min-h-10 rounded-md bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:hover:bg-gray-300"
+        >
+          {t('finalsExportPdf')}
+        </button>
       </div>
 
-      {loadError && <p className="text-sm text-red-600">{loadError}</p>}
-      {isLoading && <p className="text-sm text-gray-500">{t('finalsLoading')}</p>}
+      {loadError && <p className="text-sm text-red-600 print:hidden">{loadError}</p>}
+      {isLoading && <p className="text-sm text-gray-500 print:hidden">{t('finalsLoading')}</p>}
 
       {loaded && (
-        <div className="max-h-[70svh] overflow-auto rounded-md border border-gray-200 bg-white">
+        <div className="max-h-[70svh] overflow-auto rounded-md border border-gray-200 bg-white print:max-h-none print:overflow-visible print:rounded-none print:border-0">
           <table className="min-w-full border-separate border-spacing-0 text-sm">
-            <thead className="sticky top-0 bg-gray-50">
+            <thead className="sticky top-0 bg-gray-50 print:static">
               <tr>
                 <th scope="col" className="border-b border-gray-200 px-3 py-2 text-start font-semibold text-gray-700">
                   {t('finalsRank')}
@@ -171,7 +189,7 @@ export function FinalsView({ ready }: FinalsViewProps) {
               )}
             </tbody>
             {standings.length > 0 && (
-              <tfoot className="sticky bottom-0 bg-gray-50">
+              <tfoot className="sticky bottom-0 bg-gray-50 print:static">
                 <tr>
                   <td className="border-t border-gray-200 px-3 py-2" />
                   <td className="border-t border-gray-200 px-3 py-2 text-start font-semibold text-gray-900">

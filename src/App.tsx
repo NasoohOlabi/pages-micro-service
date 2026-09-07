@@ -31,23 +31,23 @@ function App() {
   }
 
   return (
-    <div className="relative flex min-h-svh flex-col items-center justify-start gap-2 bg-gray-50 px-4 py-3 sm:justify-center sm:gap-6 sm:py-8">
-      <LanguageSwitcher className="absolute top-2 left-2 sm:top-4 sm:left-4" />
-      {user && <UserMenu user={user} onSignOut={signOut} className="absolute top-2 right-2 sm:top-4 sm:right-4" />}
+    <div className="relative flex min-h-svh flex-col items-center justify-start gap-2 bg-gray-50 px-4 py-3 sm:justify-center sm:gap-6 sm:py-8 print:min-h-0 print:justify-start print:gap-0 print:bg-white print:p-0">
+      <LanguageSwitcher className="absolute top-2 left-2 sm:top-4 sm:left-4 print:hidden" />
+      {user && <UserMenu user={user} onSignOut={signOut} className="absolute top-2 right-2 sm:top-4 sm:right-4 print:hidden" />}
 
-      <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">{t('appTitle')}</h1>
+      <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl print:hidden">{t('appTitle')}</h1>
 
-      {error && <p className="max-w-md text-center text-sm text-red-600">{error}</p>}
+      {error && <p className="max-w-md text-center text-sm text-red-600 print:hidden">{error}</p>}
 
       {!user ? (
         <SignInButton onClick={signIn} disabled={!ready} />
       ) : (
-        <div className="flex w-full max-w-6xl flex-col items-center gap-2 sm:gap-3">
+        <div className="flex w-full max-w-6xl flex-col items-center gap-2 sm:gap-3 print:max-w-none print:gap-0">
           {!accessToken ? (
             <SignInButton onClick={signIn} disabled={!ready} />
           ) : (
             <>
-              <div className="grid w-full max-w-3xl grid-cols-3 gap-1 rounded-md border border-gray-200 bg-white p-1 sm:grid-cols-5">
+              <div className="grid w-full max-w-3xl grid-cols-3 gap-1 rounded-md border border-gray-200 bg-white p-1 sm:grid-cols-5 print:hidden">
                 {APP_TABS.map((tab) => (
                   <button
                     key={tab}
