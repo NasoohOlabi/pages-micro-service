@@ -1,5 +1,6 @@
 export interface FinalsStanding {
   name: string
+  group: string
   pages: number
   score: number
 }
@@ -10,6 +11,7 @@ function studentKey(name: string): string {
 
 export function computeFinalsStandings(args: {
   names: string[]
+  groups: Map<string, string>
   pageRows: { student: string }[]
   pointRows: { student: string; points: number }[]
   pageFactor: number
@@ -39,6 +41,7 @@ export function computeFinalsStandings(args: {
   return [...byKey.values()]
     .map((student) => ({
       name: student.name,
+      group: args.groups.get(studentKey(student.name)) ?? '',
       pages: student.pages,
       score: student.points + student.pages * args.pageFactor,
     }))

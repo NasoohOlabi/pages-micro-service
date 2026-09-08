@@ -3,7 +3,7 @@ import { parseSheetRows, type SheetRowValues } from '../sheets/schema'
 import { parsePointsRows, type PointsRowValues } from '../sheets/pointsSchema'
 import { fetchExistingRows, SheetsAccessError } from '../sheets/sheetsClient'
 import { fetchExistingPointRows } from '../sheets/pointsClient'
-import { fetchRosterNames } from '../sheets/rosterClient'
+import { fetchRosterSheet, type RosterSheet } from '../sheets/rosterClient'
 import { useLocale } from '../i18n/LocaleContext'
 import { computeFinalsStandings } from './finals'
 import { useQueryState, type FinalsSort } from '../url/queryState'
@@ -21,12 +21,31 @@ function formatScore(score: number): string {
   return Number.isInteger(score) ? String(score) : score.toFixed(2)
 }
 
+function rosterNames(sheet: RosterSheet): string[] {
+  const names = sheet.rows
+    .map((row) => row[sheet.nameColumnIndex]?.trim())
+    .filter((name): name is string => Boolean(name))
+  return Array.from(new Set(names))
+}
+
+function rosterGroups(sheet: RosterSheet): Map<string, string> {
+  const headerIndex = sheet.headers.findIndex((header) => header === 'الحلقة')
+  const groupIndex = headerIndex === -1 ? 7 : headerIndex
+  const groups = new Map<string, string>()
+  for (const row of sheet.rows) {
+    const name = row[sheet.nameColumnIndex]?.trim()
+    if (!name) continue
+    groups.set(name.toLowerCase(), row[groupIndex]?.trim() ?? '')
+  }
+  return groups
+}
+
 export function FinalsView({ ready }: FinalsViewProps) {
   const { t } = useLocale()
   const [state, setQuery] = useQueryState()
   const pageFactor = state.tab === 'finals' ? state.factor : '1'
   const sort: FinalsSort = state.tab === 'finals' ? state.sort : 'score'
-  const [names, setNames] = useState<string[] | null>(null)
+  const [roster, setRoster] = useState<RosterSheet | null>(null)
   const [pageRows, setPageRows] = useState<SheetRowValues[] | null>(null)
   const [pointRows, setPointRows] = useState<PointsRowValues[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -36,10 +55,10 @@ export function FinalsView({ ready }: FinalsViewProps) {
     if (!ready) return
     let cancelled = false
     setIsLoading(true)
-    Promise.all([fetchRosterNames(), fetchExistingRows(), fetchExistingPointRows()])
-      .then(([rosterNames, rawPages, rawPoints]) => {
+    Promise.all([fetchRosterSheet(), fetchExistingRows(), fetchExistingPointRows()])
+      .then(([sheet, rawPages, rawPoints]) => {
         if (cancelled) return
-        setNames(rosterNames)
+        setRoster(sheet)
         setPageRows(parseSheetRows(rawPages))
         setPointRows(parsePointsRows(rawPoints))
         setLoadError(null)
@@ -59,16 +78,17 @@ export function FinalsView({ ready }: FinalsViewProps) {
   }, [ready, t])
 
   const standings = useMemo(() => {
-    if (!names || !pageRows || !pointRows) return []
+    if (!roster || !pageRows || !pointRows) return []
     const rows = computeFinalsStandings({
-      names,
+      names: rosterNames(roster),
+      groups: rosterGroups(roster),
       pageRows,
       pointRows,
       pageFactor: parsePageFactor(pageFactor),
     })
     if (sort !== 'pages') return rows
     return [...rows].sort((a, b) => b.pages - a.pages || a.name.localeCompare(b.name))
-  }, [names, pageFactor, pageRows, pointRows, sort])
+  }, [pageFactor, pageRows, pointRows, roster, sort])
 
   const totals = useMemo(
     () =>
@@ -82,7 +102,7 @@ export function FinalsView({ ready }: FinalsViewProps) {
     [standings],
   )
 
-  const loaded = names !== null && pageRows !== null && pointRows !== null
+  const loaded = roster !== null && pageRows !== null && pointRows !== null
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 p-3 sm:p-6 print:max-w-none print:gap-2 print:p-0">
@@ -154,6 +174,9 @@ export function FinalsView({ ready }: FinalsViewProps) {
                 <th scope="col" className="border-b border-gray-200 px-3 py-2 text-start font-semibold text-gray-700">
                   {t('finalsStudentName')}
                 </th>
+                <th scope="col" className="border-b border-gray-200 px-3 py-2 text-start font-semibold text-gray-700">
+                  {t('rosterGroup')}
+                </th>
                 <th scope="col" className="border-b border-gray-200 px-3 py-2 text-end font-semibold text-gray-700">
                   {t('finalsPages')}
                 </th>
@@ -165,7 +188,7 @@ export function FinalsView({ ready }: FinalsViewProps) {
             <tbody>
               {standings.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-4 text-center text-gray-500">
+                  <td colSpan={5} className="px-3 py-4 text-center text-gray-500">
                     {t('finalsEmpty')}
                   </td>
                 </tr>
@@ -177,6 +200,9 @@ export function FinalsView({ ready }: FinalsViewProps) {
                     </td>
                     <td className="border-b border-gray-100 px-3 py-2 text-start text-gray-800">
                       {row.name}
+                    </td>
+                    <td className="border-b border-gray-100 px-3 py-2 text-start text-gray-800">
+                      {row.group || '-'}
                     </td>
                     <td className="border-b border-gray-100 px-3 py-2 text-end tabular-nums text-gray-800">
                       {row.pages}
@@ -195,6 +221,7 @@ export function FinalsView({ ready }: FinalsViewProps) {
                   <td className="border-t border-gray-200 px-3 py-2 text-start font-semibold text-gray-900">
                     {t('finalsTotal')}
                   </td>
+                  <td className="border-t border-gray-200 px-3 py-2" />
                   <td className="border-t border-gray-200 px-3 py-2 text-end tabular-nums font-semibold text-gray-900">
                     {totals.pages}
                   </td>
