@@ -2,6 +2,7 @@ export interface FinalsStanding {
   name: string
   group: string
   pages: number
+  cst: number
   score: number
 }
 
@@ -14,16 +15,18 @@ export function computeFinalsStandings(args: {
   groups: Map<string, string>
   pageRows: { student: string }[]
   pointRows: { student: string; points: number }[]
+  cstRows: { student: string }[]
   pageFactor: number
+  cstFactor: number
 }): FinalsStanding[] {
-  const byKey = new Map<string, { name: string; pages: number; points: number }>()
+  const byKey = new Map<string, { name: string; pages: number; points: number; cst: number }>()
 
   const ensure = (name: string) => {
     const key = studentKey(name)
     if (!key) return null
     const existing = byKey.get(key)
     if (existing) return existing
-    const created = { name: name.trim(), pages: 0, points: 0 }
+    const created = { name: name.trim(), pages: 0, points: 0, cst: 0 }
     byKey.set(key, created)
     return created
   }
@@ -37,13 +40,18 @@ export function computeFinalsStandings(args: {
     const student = ensure(row.student)
     if (student) student.points += row.points
   }
+  for (const row of args.cstRows) {
+    const student = ensure(row.student)
+    if (student) student.cst += 1
+  }
 
   return [...byKey.values()]
     .map((student) => ({
       name: student.name,
       group: args.groups.get(studentKey(student.name)) ?? '',
       pages: student.pages,
-      score: student.points + student.pages * args.pageFactor,
+      cst: student.cst,
+      score: student.points + student.pages * args.pageFactor + student.cst * args.cstFactor,
     }))
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
 }

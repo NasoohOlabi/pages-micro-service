@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { parseSheetRows, type SheetRowValues } from '../sheets/schema'
 import { parsePointsRows, type PointsRowValues } from '../sheets/pointsSchema'
+import { parseCstRows, type CstRowValues } from '../sheets/cstSchema'
 import { fetchExistingRows, SheetsAccessError } from '../sheets/sheetsClient'
 import { fetchExistingPointRows } from '../sheets/pointsClient'
+import { fetchExistingCstRows } from '../sheets/cstClient'
 import { fetchRosterSheet, type RosterSheet } from '../sheets/rosterClient'
 import { useLocale } from '../i18n/LocaleContext'
 import { computeFinalsStandings } from './finals'
@@ -44,10 +46,12 @@ export function FinalsView({ ready }: FinalsViewProps) {
   const { t } = useLocale()
   const [state, setQuery] = useQueryState()
   const pageFactor = state.tab === 'finals' ? state.factor : '1'
+  const cstFactor = state.tab === 'finals' ? state.cst : '300'
   const sort: FinalsSort = state.tab === 'finals' ? state.sort : 'score'
   const [roster, setRoster] = useState<RosterSheet | null>(null)
   const [pageRows, setPageRows] = useState<SheetRowValues[] | null>(null)
   const [pointRows, setPointRows] = useState<PointsRowValues[] | null>(null)
+  const [cstRows, setCstRows] = useState<CstRowValues[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
@@ -55,12 +59,13 @@ export function FinalsView({ ready }: FinalsViewProps) {
     if (!ready) return
     let cancelled = false
     setIsLoading(true)
-    Promise.all([fetchRosterSheet(), fetchExistingRows(), fetchExistingPointRows()])
-      .then(([sheet, rawPages, rawPoints]) => {
+    Promise.all([fetchRosterSheet(), fetchExistingRows(), fetchExistingPointRows(), fetchExistingCstRows()])
+      .then(([sheet, rawPages, rawPoints, rawCst]) => {
         if (cancelled) return
         setRoster(sheet)
         setPageRows(parseSheetRows(rawPages))
         setPointRows(parsePointsRows(rawPoints))
+        setCstRows(parseCstRows(rawCst))
         setLoadError(null)
       })
       .catch((err) => {
@@ -78,31 +83,34 @@ export function FinalsView({ ready }: FinalsViewProps) {
   }, [ready, t])
 
   const standings = useMemo(() => {
-    if (!roster || !pageRows || !pointRows) return []
+    if (!roster || !pageRows || !pointRows || !cstRows) return []
     const rows = computeFinalsStandings({
       names: rosterNames(roster),
       groups: rosterGroups(roster),
       pageRows,
       pointRows,
+      cstRows,
       pageFactor: parsePageFactor(pageFactor),
+      cstFactor: parsePageFactor(cstFactor),
     })
     if (sort !== 'pages') return rows
     return [...rows].sort((a, b) => b.pages - a.pages || a.name.localeCompare(b.name))
-  }, [pageFactor, pageRows, pointRows, roster, sort])
+  }, [cstFactor, cstRows, pageFactor, pageRows, pointRows, roster, sort])
 
   const totals = useMemo(
     () =>
       standings.reduce(
         (acc, row) => ({
           pages: acc.pages + row.pages,
+          cst: acc.cst + row.cst,
           score: acc.score + row.score,
         }),
-        { pages: 0, score: 0 },
+        { pages: 0, cst: 0, score: 0 },
       ),
     [standings],
   )
 
-  const loaded = roster !== null && pageRows !== null && pointRows !== null
+  const loaded = roster !== null && pageRows !== null && pointRows !== null && cstRows !== null
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 p-3 sm:p-6 print:max-w-none print:gap-2 print:p-0">
@@ -112,6 +120,8 @@ export function FinalsView({ ready }: FinalsViewProps) {
         </h1>
         <p className="mt-1 text-sm text-gray-600">
           {t('finalsPageFactor')}: {pageFactor}
+          {' · '}
+          {t('finalsCstFactor')}: {cstFactor}
           {' · '}
           {t('finalsSort')}: {t(sort === 'score' ? 'finalsScore' : 'finalsPages')}
         </p>
@@ -129,6 +139,21 @@ export function FinalsView({ ready }: FinalsViewProps) {
             inputMode="decimal"
             value={pageFactor}
             onChange={(event) => setQuery({ factor: event.target.value }, 'replace')}
+            className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none"
+          />
+        </div>
+        <div className="flex flex-col gap-1 rounded-md border border-gray-200 bg-white p-3 text-start sm:max-w-xs">
+          <label htmlFor="finals-cst-factor" className="text-sm font-medium text-gray-700">
+            {t('finalsCstFactor')}
+          </label>
+          <input
+            id="finals-cst-factor"
+            type="number"
+            min={0}
+            step="any"
+            inputMode="decimal"
+            value={cstFactor}
+            onChange={(event) => setQuery({ cst: event.target.value }, 'replace')}
             className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:outline-none"
           />
         </div>
@@ -181,6 +206,9 @@ export function FinalsView({ ready }: FinalsViewProps) {
                   {t('finalsPages')}
                 </th>
                 <th scope="col" className="border-b border-gray-200 px-3 py-2 text-end font-semibold text-gray-700">
+                  {t('sabrLabel')}
+                </th>
+                <th scope="col" className="border-b border-gray-200 px-3 py-2 text-end font-semibold text-gray-700">
                   {t('finalsScore')}
                 </th>
               </tr>
@@ -188,7 +216,7 @@ export function FinalsView({ ready }: FinalsViewProps) {
             <tbody>
               {standings.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-4 text-center text-gray-500">
+                  <td colSpan={6} className="px-3 py-4 text-center text-gray-500">
                     {t('finalsEmpty')}
                   </td>
                 </tr>
@@ -207,6 +235,9 @@ export function FinalsView({ ready }: FinalsViewProps) {
                     <td className="border-b border-gray-100 px-3 py-2 text-end tabular-nums text-gray-800">
                       {row.pages}
                     </td>
+                    <td className="border-b border-gray-100 px-3 py-2 text-end tabular-nums text-gray-800">
+                      {row.cst}
+                    </td>
                     <td className="border-b border-gray-100 px-3 py-2 text-end tabular-nums font-medium text-gray-900">
                       {formatScore(row.score)}
                     </td>
@@ -224,6 +255,9 @@ export function FinalsView({ ready }: FinalsViewProps) {
                   <td className="border-t border-gray-200 px-3 py-2" />
                   <td className="border-t border-gray-200 px-3 py-2 text-end tabular-nums font-semibold text-gray-900">
                     {totals.pages}
+                  </td>
+                  <td className="border-t border-gray-200 px-3 py-2 text-end tabular-nums font-semibold text-gray-900">
+                    {totals.cst}
                   </td>
                   <td className="border-t border-gray-200 px-3 py-2 text-end tabular-nums font-semibold text-gray-900">
                     {formatScore(totals.score)}

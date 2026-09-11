@@ -16,7 +16,7 @@ export type QueryState =
   | { tab: 'attendance'; sub: 'group'; date: string; group: string }
   | { tab: 'students'; sub: 'list'; q: string }
   | { tab: 'students'; sub: 'add'; q: string }
-  | { tab: 'finals'; factor: string; sort: FinalsSort }
+  | { tab: 'finals'; factor: string; cst: string; sort: FinalsSort }
 
 export type QueryPatch = {
   tab?: AppTab
@@ -29,6 +29,7 @@ export type QueryPatch = {
   group?: string
   q?: string
   factor?: string
+  cst?: string
   sort?: FinalsSort
 }
 
@@ -83,7 +84,7 @@ function defaultsFor(tab: AppTab): QueryState {
     case 'students':
       return { tab: 'students', sub: 'list', q: '' }
     case 'finals':
-      return { tab: 'finals', factor: '1', sort: 'score' }
+      return { tab: 'finals', factor: '1', cst: '300', sort: 'score' }
     default: {
       const _exhaustive: never = tab
       return _exhaustive
@@ -126,9 +127,11 @@ export function parseQueryState(search: string): QueryState {
 
   if (tab === 'finals') {
     const factor = params.get('factor')
+    const cst = params.get('cst')
     return {
       tab: 'finals',
       factor: factor ? factor : '1',
+      cst: cst ? cst : '300',
       sort: params.get('sort') === 'pages' ? 'pages' : 'score',
     }
   }
@@ -185,6 +188,7 @@ export function hrefFor(state: QueryState): string {
       break
     case 'finals':
       if (state.factor !== '1') params.set('factor', state.factor)
+      if (state.cst !== '300') params.set('cst', state.cst)
       if (state.sort !== 'score') params.set('sort', state.sort)
       break
     default: {
@@ -253,6 +257,7 @@ function withFields(state: QueryState, patch: QueryPatch): QueryState {
     return {
       tab: 'finals',
       factor: patch.factor ?? state.factor,
+      cst: patch.cst ?? state.cst,
       sort: patch.sort ?? state.sort,
     }
   }

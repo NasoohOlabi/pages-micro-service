@@ -17,7 +17,7 @@ Each tab owns a closed set of keys. Changing tabs drops every key the new tab do
 | cst | `tab` | none besides `tab=cst` |
 | attendance | `tab`, `sub`, `date`, `group` | `sub` absent = student, `date` absent = today, `group` only when `sub=group` |
 | students | `tab`, `sub`, `q` | `sub` absent = list, `q` absent = no filter |
-| finals | `tab`, `factor`, `sort` | `factor` absent = `1`, `sort` absent = `score` |
+| finals | `tab`, `factor`, `cst`, `sort` | `factor` absent = `1`, `cst` absent = `300`, `sort` absent = `score` |
 
 `sub` is one key with a per-tab enum. Legal values never overlap: `stats` (pages), `group` (attendance), `add` (students). A new sub-tab value must be unique across the app, or it needs its own key.
 
@@ -33,7 +33,7 @@ Examples:
 ## History
 
 - `pushState` for tab and sub-tab changes. Back returns to the previous screen.
-- `replaceState` for filters (`from`, `to`, `student`, `date`, `group`, `q`, `factor`, `sort`, `view`). Date-picker keystrokes must not pile up history.
+- `replaceState` for filters (`from`, `to`, `student`, `date`, `group`, `q`, `factor`, `cst`, `sort`, `view`). Date-picker keystrokes must not pile up history.
 
 Omit a key when it equals the default. Do not `replaceState` a default into the URL except stats `from`/`to`: on first visit to stats with neither param, write this month's resolved ISO dates so a copied link is an absolute range.
 
