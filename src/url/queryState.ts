@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-export const APP_TABS = ['pages', 'points', 'attendance', 'students', 'finals'] as const
+export const APP_TABS = ['pages', 'points', 'cst', 'attendance', 'students', 'finals'] as const
 export type AppTab = (typeof APP_TABS)[number]
 
 export type StatsView = 'students' | 'time' | 'teachers' | 'coverage'
@@ -11,6 +11,7 @@ export type QueryState =
   | { tab: 'pages'; sub: 'log' }
   | { tab: 'pages'; sub: 'stats'; view: StatsView; from: string | null; to: string | null; student: string }
   | { tab: 'points' }
+  | { tab: 'cst' }
   | { tab: 'attendance'; sub: 'student'; date: string }
   | { tab: 'attendance'; sub: 'group'; date: string; group: string }
   | { tab: 'students'; sub: 'list'; q: string }
@@ -75,6 +76,8 @@ function defaultsFor(tab: AppTab): QueryState {
       return DEFAULT_PAGES
     case 'points':
       return { tab: 'points' }
+    case 'cst':
+      return { tab: 'cst' }
     case 'attendance':
       return { tab: 'attendance', sub: 'student', date: localIsoDate() }
     case 'students':
@@ -106,6 +109,8 @@ export function parseQueryState(search: string): QueryState {
   const sub = params.get('sub')
 
   if (tab === 'points') return { tab: 'points' }
+
+  if (tab === 'cst') return { tab: 'cst' }
 
   if (tab === 'attendance') {
     const date = parseIso(params.get('date')) ?? localIsoDate()
@@ -164,6 +169,8 @@ export function hrefFor(state: QueryState): string {
       }
       break
     case 'points':
+      break
+    case 'cst':
       break
     case 'attendance':
       if (state.sub === 'group') {

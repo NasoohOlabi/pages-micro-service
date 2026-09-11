@@ -14,6 +14,7 @@ Each tab owns a closed set of keys. Changing tabs drops every key the new tab do
 | --- | --- | --- |
 | pages | `tab`, `sub`, `view`, `from`, `to`, `student` | `tab=pages`, `sub` absent = log, `view=students`, month range written on first stats visit |
 | points | `tab` | none besides `tab=points` |
+| cst | `tab` | none besides `tab=cst` |
 | attendance | `tab`, `sub`, `date`, `group` | `sub` absent = student, `date` absent = today, `group` only when `sub=group` |
 | students | `tab`, `sub`, `q` | `sub` absent = list, `q` absent = no filter |
 | finals | `tab`, `factor`, `sort` | `factor` absent = `1`, `sort` absent = `score` |
@@ -40,7 +41,7 @@ Stats presets: week and month write resolved `from`/`to`. All-time deletes both.
 
 ## Stays in React
 
-Form drafts (pages log, points, add student). Autocomplete open/highlight. Attendance status radios and selected-student chips. Stats "show all" and the selected time-chart bar. Roster row expansion. Locale (`localStorage`). Sheet payloads, load flags, toasts, Google token.
+Form drafts (pages log, points, CST, add student). Autocomplete open/highlight. Attendance status radios and selected-student chips. Stats "show all" and the selected time-chart bar. Roster row expansion. Locale (`localStorage`). Sheet payloads, load flags, toasts, Google token.
 
 A new `useState` belongs in React when it is a draft, a transient widget, or fetched data. It belongs in the query string when another teacher should see the same screen from a pasted link.
 

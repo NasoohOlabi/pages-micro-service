@@ -12,6 +12,7 @@ interface ImportMetaEnv {
   readonly VITE_SHEET_ID: string
   readonly VITE_SHEET_RANGE: string
   readonly VITE_POINTS_SHEET_RANGE: string
+  readonly VITE_CST_SHEET_RANGE: string
   readonly VITE_ATTENDANCE_SHEET_ID: string
   readonly VITE_ATTENDANCE_SHEET_NAME: string
   readonly VITE_ROSTER_SHEET_ID: string

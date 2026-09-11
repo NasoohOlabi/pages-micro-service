@@ -19,6 +19,7 @@ export const config = {
   sheetId: requireEnv('VITE_SHEET_ID'),
   sheetRange: requireEnv('VITE_SHEET_RANGE'),
   pointsSheetRange: requireEnv('VITE_POINTS_SHEET_RANGE'),
+  cstSheetRange: requireEnv('VITE_CST_SHEET_RANGE'),
   attendanceSheetId: requireEnv('VITE_ATTENDANCE_SHEET_ID'),
   attendanceSheetName: requireEnv('VITE_ATTENDANCE_SHEET_NAME'),
   rosterSheetId: requireEnv('VITE_ROSTER_SHEET_ID'),

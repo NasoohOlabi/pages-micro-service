@@ -2,6 +2,7 @@ import { useGoogleAuth } from './auth/useGoogleAuth'
 import { SignInButton } from './auth/SignInButton'
 import { PagesTab } from './form/PagesTab'
 import { PointsForm } from './form/PointsForm'
+import { CstForm } from './form/CstForm'
 import { AttendanceForm } from './form/AttendanceForm'
 import { RosterView } from './form/RosterView'
 import { FinalsView } from './stats/FinalsView'
@@ -15,6 +16,7 @@ import { APP_TABS, type AppTab, useQueryState } from './url/queryState'
 const TAB_LABELS = {
   pages: 'pagesTab',
   points: 'pointsTab',
+  cst: 'cstTab',
   attendance: 'attendanceTab',
   students: 'studentsTab',
   finals: 'finalsTab',
@@ -47,7 +49,7 @@ function App() {
             <SignInButton onClick={signIn} disabled={!ready} />
           ) : (
             <>
-              <div className="grid w-full max-w-3xl grid-cols-3 gap-1 rounded-md border border-gray-200 bg-white p-1 sm:grid-cols-5 print:hidden">
+              <div className="grid w-full max-w-3xl grid-cols-3 gap-1 rounded-md border border-gray-200 bg-white p-1 sm:grid-cols-6 print:hidden">
                 {APP_TABS.map((tab) => (
                   <button
                     key={tab}
@@ -68,6 +70,8 @@ function App() {
                 <PagesTab user={user} ready={ready} />
               ) : activeTab === 'points' ? (
                 <PointsForm user={user} ready={ready} />
+              ) : activeTab === 'cst' ? (
+                <CstForm ready={ready} />
               ) : activeTab === 'students' ? (
                 <RosterView ready={ready} />
               ) : activeTab === 'finals' ? (
