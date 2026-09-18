@@ -53,5 +53,6 @@ export function computeFinalsStandings(args: {
       cst: student.cst,
       score: student.points + student.pages * args.pageFactor + student.cst * args.cstFactor,
     }))
+    .filter((row) => row.score > 0)
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
 }

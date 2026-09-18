@@ -12,4 +12,12 @@
   tr {
     break-inside: avoid;
   }
+
+  h2 {
+    break-after: avoid;
+  }
+
+  a[href^='#']::after {
+    content: none;
+  }
 }

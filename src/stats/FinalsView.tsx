@@ -7,7 +7,8 @@ import { fetchExistingPointRows } from '../sheets/pointsClient'
 import { fetchExistingCstRows } from '../sheets/cstClient'
 import { fetchRosterSheet, type RosterSheet } from '../sheets/rosterClient'
 import { useLocale } from '../i18n/LocaleContext'
-import { computeFinalsStandings } from './finals'
+import type { TranslationKey } from '../i18n/translations'
+import { computeFinalsStandings, type FinalsStanding } from './finals'
 import { useQueryState, type FinalsSort } from '../url/queryState'
 
 interface FinalsViewProps {
@@ -21,6 +22,134 @@ function parsePageFactor(value: string): number {
 
 function formatScore(score: number): string {
   return Number.isInteger(score) ? String(score) : score.toFixed(2)
+}
+
+function sortByPages(rows: FinalsStanding[]): FinalsStanding[] {
+  return [...rows].sort((a, b) => b.pages - a.pages || a.name.localeCompare(b.name))
+}
+
+function totalsFor(rows: FinalsStanding[]) {
+  return rows.reduce(
+    (acc, row) => ({
+      pages: acc.pages + row.pages,
+      cst: acc.cst + row.cst,
+      score: acc.score + row.score,
+    }),
+    { pages: 0, cst: 0, score: 0 },
+  )
+}
+
+function groupTables(rows: FinalsStanding[]): { key: string; rows: FinalsStanding[] }[] {
+  const groups = new Map<string, FinalsStanding[]>()
+  for (const row of rows) {
+    const list = groups.get(row.group)
+    if (list) list.push(row)
+    else groups.set(row.group, [row])
+  }
+  const named = [...groups.keys()]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, 'ar'))
+    .map((key) => ({ key, rows: groups.get(key)! }))
+  named.push({ key: '', rows: groups.get('') ?? [] })
+  return named
+}
+
+function StandingsTable({
+  rows,
+  t,
+  scrollable = false,
+}: {
+  rows: FinalsStanding[]
+  t: (key: TranslationKey) => string
+  scrollable?: boolean
+}) {
+  const totals = totalsFor(rows)
+  return (
+    <div
+      className={
+        scrollable
+          ? 'max-h-[70svh] overflow-auto rounded-md border border-gray-200 bg-white'
+          : 'overflow-visible'
+      }
+    >
+      <table className="min-w-full border-separate border-spacing-0 text-sm">
+        <thead className={scrollable ? 'sticky top-0 bg-gray-50' : 'bg-gray-50'}>
+          <tr>
+            <th scope="col" className="border-b border-gray-200 px-3 py-2 text-start font-semibold text-gray-700">
+              {t('finalsRank')}
+            </th>
+            <th scope="col" className="border-b border-gray-200 px-3 py-2 text-start font-semibold text-gray-700">
+              {t('finalsStudentName')}
+            </th>
+            <th scope="col" className="border-b border-gray-200 px-3 py-2 text-start font-semibold text-gray-700">
+              {t('rosterGroup')}
+            </th>
+            <th scope="col" className="border-b border-gray-200 px-3 py-2 text-end font-semibold text-gray-700">
+              {t('finalsPages')}
+            </th>
+            <th scope="col" className="border-b border-gray-200 px-3 py-2 text-end font-semibold text-gray-700">
+              {t('sabrLabel')}
+            </th>
+            <th scope="col" className="border-b border-gray-200 px-3 py-2 text-end font-semibold text-gray-700">
+              {t('finalsScore')}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="px-3 py-4 text-center text-gray-500">
+                {t('finalsEmpty')}
+              </td>
+            </tr>
+          ) : (
+            rows.map((row, index) => (
+              <tr key={row.name} className="odd:bg-white even:bg-gray-50">
+                <td className="border-b border-gray-100 px-3 py-2 text-start tabular-nums text-gray-800">
+                  {index + 1}
+                </td>
+                <td className="border-b border-gray-100 px-3 py-2 text-start text-gray-800">
+                  {row.name}
+                </td>
+                <td className="border-b border-gray-100 px-3 py-2 text-start text-gray-800">
+                  {row.group || '-'}
+                </td>
+                <td className="border-b border-gray-100 px-3 py-2 text-end tabular-nums text-gray-800">
+                  {row.pages}
+                </td>
+                <td className="border-b border-gray-100 px-3 py-2 text-end tabular-nums text-gray-800">
+                  {row.cst}
+                </td>
+                <td className="border-b border-gray-100 px-3 py-2 text-end tabular-nums font-medium text-gray-900">
+                  {formatScore(row.score)}
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+        {rows.length > 0 && (
+          <tfoot className={scrollable ? 'sticky bottom-0 bg-gray-50' : 'bg-gray-50'}>
+            <tr>
+              <td className="border-t border-gray-200 px-3 py-2" />
+              <td className="border-t border-gray-200 px-3 py-2 text-start font-semibold text-gray-900">
+                {t('finalsTotal')}
+              </td>
+              <td className="border-t border-gray-200 px-3 py-2" />
+              <td className="border-t border-gray-200 px-3 py-2 text-end tabular-nums font-semibold text-gray-900">
+                {totals.pages}
+              </td>
+              <td className="border-t border-gray-200 px-3 py-2 text-end tabular-nums font-semibold text-gray-900">
+                {totals.cst}
+              </td>
+              <td className="border-t border-gray-200 px-3 py-2 text-end tabular-nums font-semibold text-gray-900">
+                {formatScore(totals.score)}
+              </td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  )
 }
 
 function rosterNames(sheet: RosterSheet): string[] {
@@ -45,7 +174,7 @@ function rosterGroups(sheet: RosterSheet): Map<string, string> {
 export function FinalsView({ ready }: FinalsViewProps) {
   const { t } = useLocale()
   const [state, setQuery] = useQueryState()
-  const pageFactor = state.tab === 'finals' ? state.factor : '1'
+  const pageFactor = state.tab === 'finals' ? state.factor : '10'
   const cstFactor = state.tab === 'finals' ? state.cst : '300'
   const sort: FinalsSort = state.tab === 'finals' ? state.sort : 'score'
   const [roster, setRoster] = useState<RosterSheet | null>(null)
@@ -82,9 +211,9 @@ export function FinalsView({ ready }: FinalsViewProps) {
     }
   }, [ready, t])
 
-  const standings = useMemo(() => {
+  const scoreStandings = useMemo(() => {
     if (!roster || !pageRows || !pointRows || !cstRows) return []
-    const rows = computeFinalsStandings({
+    return computeFinalsStandings({
       names: rosterNames(roster),
       groups: rosterGroups(roster),
       pageRows,
@@ -93,21 +222,21 @@ export function FinalsView({ ready }: FinalsViewProps) {
       pageFactor: parsePageFactor(pageFactor),
       cstFactor: parsePageFactor(cstFactor),
     })
-    if (sort !== 'pages') return rows
-    return [...rows].sort((a, b) => b.pages - a.pages || a.name.localeCompare(b.name))
-  }, [cstFactor, cstRows, pageFactor, pageRows, pointRows, roster, sort])
+  }, [cstFactor, cstRows, pageFactor, pageRows, pointRows, roster])
 
-  const totals = useMemo(
-    () =>
-      standings.reduce(
-        (acc, row) => ({
-          pages: acc.pages + row.pages,
-          cst: acc.cst + row.cst,
-          score: acc.score + row.score,
-        }),
-        { pages: 0, cst: 0, score: 0 },
-      ),
-    [standings],
+  const pageStandings = useMemo(() => sortByPages(scoreStandings), [scoreStandings])
+  const standings = sort === 'pages' ? pageStandings : scoreStandings
+  const printSections = useMemo(
+    () => [
+      { id: 'finals-pages', title: t('finalsPrintByPages'), rows: pageStandings },
+      { id: 'finals-score', title: t('finalsPrintByScore'), rows: scoreStandings },
+      ...groupTables(scoreStandings).map((group, index) => ({
+        id: `finals-group-${index}`,
+        title: group.key || t('finalsUnknownGroup'),
+        rows: group.rows,
+      })),
+    ],
+    [pageStandings, scoreStandings, t],
   )
 
   const loaded = roster !== null && pageRows !== null && pointRows !== null && cstRows !== null
@@ -122,8 +251,6 @@ export function FinalsView({ ready }: FinalsViewProps) {
           {t('finalsPageFactor')}: {pageFactor}
           {' · '}
           {t('finalsCstFactor')}: {cstFactor}
-          {' · '}
-          {t('finalsSort')}: {t(sort === 'score' ? 'finalsScore' : 'finalsPages')}
         </p>
       </div>
       <div className="flex flex-wrap items-end gap-3 print:hidden">
@@ -189,84 +316,31 @@ export function FinalsView({ ready }: FinalsViewProps) {
       {isLoading && <p className="text-sm text-gray-500 print:hidden">{t('finalsLoading')}</p>}
 
       {loaded && (
-        <div className="max-h-[70svh] overflow-auto rounded-md border border-gray-200 bg-white print:max-h-none print:overflow-visible print:rounded-none print:border-0">
-          <table className="min-w-full border-separate border-spacing-0 text-sm">
-            <thead className="sticky top-0 bg-gray-50 print:static">
-              <tr>
-                <th scope="col" className="border-b border-gray-200 px-3 py-2 text-start font-semibold text-gray-700">
-                  {t('finalsRank')}
-                </th>
-                <th scope="col" className="border-b border-gray-200 px-3 py-2 text-start font-semibold text-gray-700">
-                  {t('finalsStudentName')}
-                </th>
-                <th scope="col" className="border-b border-gray-200 px-3 py-2 text-start font-semibold text-gray-700">
-                  {t('rosterGroup')}
-                </th>
-                <th scope="col" className="border-b border-gray-200 px-3 py-2 text-end font-semibold text-gray-700">
-                  {t('finalsPages')}
-                </th>
-                <th scope="col" className="border-b border-gray-200 px-3 py-2 text-end font-semibold text-gray-700">
-                  {t('sabrLabel')}
-                </th>
-                <th scope="col" className="border-b border-gray-200 px-3 py-2 text-end font-semibold text-gray-700">
-                  {t('finalsScore')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {standings.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-3 py-4 text-center text-gray-500">
-                    {t('finalsEmpty')}
-                  </td>
-                </tr>
-              ) : (
-                standings.map((row, index) => (
-                  <tr key={row.name} className="odd:bg-white even:bg-gray-50">
-                    <td className="border-b border-gray-100 px-3 py-2 text-start tabular-nums text-gray-800">
-                      {index + 1}
-                    </td>
-                    <td className="border-b border-gray-100 px-3 py-2 text-start text-gray-800">
-                      {row.name}
-                    </td>
-                    <td className="border-b border-gray-100 px-3 py-2 text-start text-gray-800">
-                      {row.group || '-'}
-                    </td>
-                    <td className="border-b border-gray-100 px-3 py-2 text-end tabular-nums text-gray-800">
-                      {row.pages}
-                    </td>
-                    <td className="border-b border-gray-100 px-3 py-2 text-end tabular-nums text-gray-800">
-                      {row.cst}
-                    </td>
-                    <td className="border-b border-gray-100 px-3 py-2 text-end tabular-nums font-medium text-gray-900">
-                      {formatScore(row.score)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-            {standings.length > 0 && (
-              <tfoot className="sticky bottom-0 bg-gray-50 print:static">
-                <tr>
-                  <td className="border-t border-gray-200 px-3 py-2" />
-                  <td className="border-t border-gray-200 px-3 py-2 text-start font-semibold text-gray-900">
-                    {t('finalsTotal')}
-                  </td>
-                  <td className="border-t border-gray-200 px-3 py-2" />
-                  <td className="border-t border-gray-200 px-3 py-2 text-end tabular-nums font-semibold text-gray-900">
-                    {totals.pages}
-                  </td>
-                  <td className="border-t border-gray-200 px-3 py-2 text-end tabular-nums font-semibold text-gray-900">
-                    {totals.cst}
-                  </td>
-                  <td className="border-t border-gray-200 px-3 py-2 text-end tabular-nums font-semibold text-gray-900">
-                    {formatScore(totals.score)}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+        <>
+          <div className="print:hidden">
+            <StandingsTable rows={standings} t={t} scrollable />
+          </div>
+          <div className="hidden print:block">
+            <nav>
+              <h2 className="mb-2 text-base font-semibold text-gray-900">{t('finalsPrintToc')}</h2>
+              <ol className="list-decimal ps-6 text-sm">
+                {printSections.map((section) => (
+                  <li key={section.id} className="py-0.5">
+                    <a href={`#${section.id}`} className="text-indigo-700 underline">
+                      {section.title}
+                    </a>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+            {printSections.map((section) => (
+              <section id={section.id} key={section.id} className="print:break-before-page">
+                <h2 className="mb-2 text-base font-semibold text-gray-900">{section.title}</h2>
+                <StandingsTable rows={section.rows} t={t} />
+              </section>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

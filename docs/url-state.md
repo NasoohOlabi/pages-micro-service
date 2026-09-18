@@ -17,7 +17,7 @@ Each tab owns a closed set of keys. Changing tabs drops every key the new tab do
 | cst | `tab` | none besides `tab=cst` |
 | attendance | `tab`, `sub`, `date`, `group` | `sub` absent = student, `date` absent = today, `group` only when `sub=group` |
 | students | `tab`, `sub`, `q` | `sub` absent = list, `q` absent = no filter |
-| finals | `tab`, `factor`, `cst`, `sort` | `factor` absent = `1`, `cst` absent = `300`, `sort` absent = `score` |
+| finals | `tab`, `factor`, `cst`, `sort` | `factor` absent = `10`, `cst` absent = `300`, `sort` absent = `score` |
 
 `sub` is one key with a per-tab enum. Legal values never overlap: `stats` (pages), `group` (attendance), `add` (students). A new sub-tab value must be unique across the app, or it needs its own key.
 
