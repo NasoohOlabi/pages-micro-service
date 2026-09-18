@@ -33,9 +33,16 @@ function sortByName(rows: FinalsStanding[]): FinalsStanding[] {
   return [...rows].sort((a, b) => a.name.localeCompare(b.name, 'ar'))
 }
 
+function printStamp(date = new Date()): string {
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+  return `${localIsoDate(date)}-${hours}${minutes}${seconds}`
+}
+
 function printPdf() {
   const previous = document.title
-  document.title = `نتائج-${localIsoDate()}`
+  document.title = `نتائج-${printStamp()}`
   const restore = () => {
     document.title = previous
     window.removeEventListener('afterprint', restore)
