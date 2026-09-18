@@ -8,6 +8,7 @@ import { fetchExistingCstRows } from '../sheets/cstClient'
 import { fetchRosterSheet, type RosterSheet } from '../sheets/rosterClient'
 import { useLocale } from '../i18n/LocaleContext'
 import type { TranslationKey } from '../i18n/translations'
+import { localIsoDate } from './aggregations'
 import { computeFinalsStandings, type FinalsStanding } from './finals'
 import { useQueryState, type FinalsSort } from '../url/queryState'
 
@@ -25,7 +26,22 @@ function formatScore(score: number): string {
 }
 
 function sortByPages(rows: FinalsStanding[]): FinalsStanding[] {
-  return [...rows].sort((a, b) => b.pages - a.pages || a.name.localeCompare(b.name))
+  return [...rows].sort((a, b) => b.pages - a.pages || a.name.localeCompare(b.name, 'ar'))
+}
+
+function sortByName(rows: FinalsStanding[]): FinalsStanding[] {
+  return [...rows].sort((a, b) => a.name.localeCompare(b.name, 'ar'))
+}
+
+function printPdf() {
+  const previous = document.title
+  document.title = `نتائج-${localIsoDate()}`
+  const restore = () => {
+    document.title = previous
+    window.removeEventListener('afterprint', restore)
+  }
+  window.addEventListener('afterprint', restore)
+  window.print()
 }
 
 function totalsFor(rows: FinalsStanding[]) {
@@ -225,18 +241,20 @@ export function FinalsView({ ready }: FinalsViewProps) {
   }, [cstFactor, cstRows, pageFactor, pageRows, pointRows, roster])
 
   const pageStandings = useMemo(() => sortByPages(scoreStandings), [scoreStandings])
+  const nameStandings = useMemo(() => sortByName(scoreStandings), [scoreStandings])
   const standings = sort === 'pages' ? pageStandings : scoreStandings
   const printSections = useMemo(
     () => [
       { id: 'finals-pages', title: t('finalsPrintByPages'), rows: pageStandings },
       { id: 'finals-score', title: t('finalsPrintByScore'), rows: scoreStandings },
+      { id: 'finals-name', title: t('finalsPrintByName'), rows: nameStandings },
       ...groupTables(scoreStandings).map((group, index) => ({
         id: `finals-group-${index}`,
         title: group.key || t('finalsUnknownGroup'),
         rows: group.rows,
       })),
     ],
-    [pageStandings, scoreStandings, t],
+    [nameStandings, pageStandings, scoreStandings, t],
   )
 
   const loaded = roster !== null && pageRows !== null && pointRows !== null && cstRows !== null
@@ -304,7 +322,7 @@ export function FinalsView({ ready }: FinalsViewProps) {
         </div>
         <button
           type="button"
-          onClick={() => window.print()}
+          onClick={printPdf}
           disabled={!loaded || standings.length === 0}
           className="min-h-10 rounded-md bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:hover:bg-gray-300"
         >
