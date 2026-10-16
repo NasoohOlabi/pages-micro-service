@@ -1,15 +1,9 @@
 import { config } from '../config'
 import { pointsRowToValues, type PointsRowValues } from './pointsSchema'
-import { withSheetsAccessErrorHandling } from './sheetsClient'
+import { fetchSheetDataRows, withSheetsAccessErrorHandling } from './sheetsClient'
 
 export async function fetchExistingPointRows(): Promise<string[][]> {
-  return withSheetsAccessErrorHandling(async () => {
-    const response = await window.gapi.client.sheets.spreadsheets.values.get({
-      spreadsheetId: config.sheetId,
-      range: config.pointsSheetRange,
-    })
-    return response.result.values ?? []
-  })
+  return fetchSheetDataRows(config.pointsSheetRange)
 }
 
 export async function appendPointRow(row: PointsRowValues): Promise<void> {

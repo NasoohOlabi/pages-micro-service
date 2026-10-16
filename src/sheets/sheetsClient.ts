@@ -1,6 +1,7 @@
 import { config } from '../config'
 import { withTokenRetry } from '../auth/token'
 import { COLUMN_ORDER, UNIQUE_KEY, rowToValues, type SheetRowValues } from './schema'
+import { sheetDataRows } from './archivedRows'
 
 export class SheetsAccessError extends Error {}
 
@@ -19,14 +20,19 @@ export async function withSheetsAccessErrorHandling<T>(fn: () => Promise<T>): Pr
   }
 }
 
-export async function fetchExistingRows(): Promise<string[][]> {
+export async function fetchSheetDataRows(range: string, includeArchived = false): Promise<string[][]> {
   return withSheetsAccessErrorHandling(async () => {
+    const sheetTitle = range.slice(0, range.lastIndexOf('!'))
     const response = await window.gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId: config.sheetId,
-      range: config.sheetRange,
+      range: `${sheetTitle}!A1:ZZ`,
     })
-    return response.result.values ?? []
+    return sheetDataRows(response.result.values ?? [], includeArchived)
   })
+}
+
+export async function fetchExistingRows({ includeArchived = false }: { includeArchived?: boolean } = {}): Promise<string[][]> {
+  return fetchSheetDataRows(config.sheetRange, includeArchived)
 }
 
 function normalize(value: string | undefined): string {

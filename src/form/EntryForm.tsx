@@ -101,7 +101,7 @@ export function EntryForm({ user, ready }: EntryFormProps) {
     setPendingInsert(null)
     try {
       const rows = expandPageRange(values)
-      const existingRows = await fetchExistingRows()
+      const existingRows = await fetchExistingRows({ includeArchived: true })
       const duplicatePages = findDuplicatePages(existingRows, rows)
       if (duplicatePages.length > 0) {
         const newRows = rows.filter((row) => !duplicatePages.includes(row.page))
