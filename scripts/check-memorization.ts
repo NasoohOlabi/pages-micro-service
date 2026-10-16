@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { buildMemorizationHistory } from '../src/stats/memorization'
+import { buildMemorizationHistory, surahsForPages } from '../src/stats/memorization'
+import { surahPages } from '../src/stats/surahPages'
 import { sheetDataRows } from '../src/sheets/archivedRows'
 import { parseSheetRows } from '../src/sheets/schema'
 import { hrefFor, parseQueryState } from '../src/url/queryState'
@@ -28,6 +29,17 @@ assert.deepEqual(student, {
 })
 assert.equal(history.length, 2)
 assert.deepEqual(buildMemorizationHistory([]), [])
+assert.deepEqual(surahsForPages(1), ['الفاتحة'])
+assert.deepEqual(surahsForPages(2), ['البقرة'])
+assert.deepEqual(surahsForPages(49), ['البقرة'])
+assert.deepEqual(surahsForPages(50), ['آل عمران'])
+assert.deepEqual(surahsForPages(106), ['النساء', 'المائدة'])
+assert.deepEqual(surahsForPages(603), ['الكافرون', 'النصر', 'المسد'])
+assert.deepEqual(surahsForPages(604), ['الإخلاص', 'الفلق', 'الناس'])
+assert.deepEqual(surahsForPages(1, 2), ['الفاتحة', 'البقرة'])
+assert.deepEqual(surahsForPages(603, 604), ['الكافرون', 'النصر', 'المسد', 'الإخلاص', 'الفلق', 'الناس'])
+assert.equal(surahPages.length, 114)
+for (let page = 1; page <= 604; page += 1) assert.ok(surahsForPages(page).length > 0)
 
 Object.defineProperty(globalThis, 'window', { value: { location: { pathname: '/' } } })
 const state = { tab: 'memorization', q: 'سارية حوري' } satisfies ReturnType<typeof parseQueryState>

@@ -1,5 +1,12 @@
 import type { SheetRowValues } from '../sheets/schema'
 import { parseLogDate } from './aggregations'
+import { surahPages } from './surahPages'
+
+export function surahsForPages(start: number, end = start): string[] {
+  return surahPages
+    .filter((surah) => surah.firstPage <= end && surah.lastPage >= start)
+    .map((surah) => surah.name)
+}
 
 export interface MemorizedPage {
   page: number

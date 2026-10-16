@@ -5,7 +5,7 @@ import { fetchExistingRows, SheetsAccessError } from '../sheets/sheetsClient'
 import { parseSheetRows, type SheetRowValues } from '../sheets/schema'
 import { useQueryState } from '../url/queryState'
 import { englishKeysToArabic } from '../utils/keymap'
-import { buildMemorizationHistory } from './memorization'
+import { buildMemorizationHistory, surahsForPages } from './memorization'
 
 export function MemorizationView({ ready }: { ready: boolean }) {
   const { t } = useLocale()
@@ -66,24 +66,32 @@ export function MemorizationView({ ready }: { ready: boolean }) {
                   <span className="font-semibold text-gray-900">{student.student}</span>
                   <span className="ms-3 text-sm text-gray-500">{t('memorizationCount', { count: student.pages.length })}</span>
                   <span className="mt-2 flex flex-wrap gap-2">
-                    {student.ranges.map((range) => (
-                      <span key={range.start} className="rounded bg-indigo-50 px-2 py-1 text-sm text-indigo-700">
-                        {range.start === range.end
-                          ? t('memorizationPage', { page: range.start })
-                          : t('memorizationRange', range)}
-                      </span>
-                    ))}
+                    {student.ranges.map((range) => {
+                      const surahs = surahsForPages(range.start, range.end)
+                      const names = surahs.length > 3
+                        ? t('memorizationSurahRange', { first: surahs[0], last: surahs[surahs.length - 1] })
+                        : surahs.join('، ')
+                      return (
+                        <span key={range.start} className="rounded bg-indigo-50 px-2 py-1 text-sm text-indigo-700">
+                          {range.start === range.end
+                            ? t('memorizationPage', { page: range.start })
+                            : t('memorizationRange', range)}
+                          <span dir="auto" className="mt-0.5 block text-xs">{names}</span>
+                        </span>
+                      )
+                    })}
                   </span>
                 </summary>
                 <div className="max-h-96 overflow-auto border-t border-gray-100">
                   <table className="w-full text-start text-sm">
                     <thead className="sticky top-0 bg-gray-50 text-gray-700">
-                      <tr><th className="px-4 py-2 text-start">{t('finalsPages')}</th><th className="px-4 py-2 text-start">{t('memorizationDates')}</th></tr>
+                      <tr><th className="px-4 py-2 text-start">{t('finalsPages')}</th><th className="px-4 py-2 text-start">{t('memorizationSurahs')}</th><th className="px-4 py-2 text-start">{t('memorizationDates')}</th></tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {student.pages.map(({ page, dates }) => (
                         <tr key={page}>
                           <td className="px-4 py-2 tabular-nums">{page}</td>
+                          <td dir="auto" className="px-4 py-2">{surahsForPages(page).join('، ')}</td>
                           <td className="px-4 py-2">{dates.length ? dates.join(', ') : t('memorizationMissingDate')}</td>
                         </tr>
                       ))}
@@ -92,6 +100,11 @@ export function MemorizationView({ ready }: { ready: boolean }) {
                 </div>
               </details>
             ))}
+      <p className="text-xs text-gray-500">
+        <a href="https://tanzil.net/docs/Quran_Metadata" target="_blank" rel="noreferrer" className="underline">
+          {t('memorizationMappingSource')}
+        </a>
+      </p>
     </section>
   )
 }
