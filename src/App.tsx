@@ -6,6 +6,7 @@ import { CstForm } from './form/CstForm'
 import { AttendanceForm } from './form/AttendanceForm'
 import { RosterView } from './form/RosterView'
 import { FinalsView } from './stats/FinalsView'
+import { MemorizationView } from './stats/MemorizationView'
 import { LanguageSwitcher } from './i18n/LanguageSwitcher'
 import { UserMenu } from './auth/UserMenu'
 import { useLocale } from './i18n/LocaleContext'
@@ -15,6 +16,7 @@ import { APP_TABS, type AppTab, useQueryState } from './url/queryState'
 
 const TAB_LABELS = {
   pages: 'pagesTab',
+  memorization: 'memorizationTab',
   points: 'pointsTab',
   cst: 'cstTab',
   attendance: 'attendanceTab',
@@ -49,7 +51,7 @@ function App() {
             <SignInButton onClick={signIn} disabled={!ready} />
           ) : (
             <>
-              <div className="grid w-full max-w-3xl grid-cols-3 gap-1 rounded-md border border-gray-200 bg-white p-1 sm:grid-cols-6 print:hidden">
+              <div className="grid w-full max-w-4xl grid-cols-3 gap-1 rounded-md border border-gray-200 bg-white p-1 sm:grid-cols-7 print:hidden">
                 {APP_TABS.map((tab) => (
                   <button
                     key={tab}
@@ -68,6 +70,8 @@ function App() {
               </div>
               {activeTab === 'pages' ? (
                 <PagesTab user={user} ready={ready} />
+              ) : activeTab === 'memorization' ? (
+                <MemorizationView ready={ready} />
               ) : activeTab === 'points' ? (
                 <PointsForm user={user} ready={ready} />
               ) : activeTab === 'cst' ? (

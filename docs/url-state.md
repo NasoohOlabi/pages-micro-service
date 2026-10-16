@@ -14,6 +14,7 @@ Each tab owns a closed set of keys. Changing tabs drops every key the new tab do
 | --- | --- | --- |
 | pages | `tab`, `sub`, `view`, `from`, `to`, `student` | `tab=pages`, `sub` absent = log, `view=students`, month range written on first stats visit |
 | points | `tab` | none besides `tab=points` |
+| memorization | `tab`, `q` | `q` absent = all students; includes archived and active pages |
 | cst | `tab` | none besides `tab=cst` |
 | attendance | `tab`, `sub`, `date`, `group` | `sub` absent = student, `date` absent = today, `group` only when `sub=group` |
 | students | `tab`, `sub`, `q` | `sub` absent = list, `q` absent = no filter |
