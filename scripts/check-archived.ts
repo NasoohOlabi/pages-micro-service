@@ -26,6 +26,11 @@ const cst = [
 assert.deepEqual(sheetDataRows([]), [])
 assert.deepEqual(sheetDataRows([['Student'], ['Student']]), [['Student']])
 assert.deepEqual(sheetDataRows(pages, true), pages.slice(1))
+assert.deepEqual(sheetDataRows([
+  ['الطالب', 'مؤرشفة'],
+  ['Archived student', 'YES'],
+  ['Active student', ''],
+]), [['Active student', '']])
 assert.deepEqual(parseSheetRows(sheetDataRows(pages)).map((row) => row.page), [1, 3])
 assert.deepEqual(computeFinalsStandings({
   names: ['Student'],
