@@ -1,3 +1,4 @@
+import { useStudentFilter } from '../students/StudentFilterContext'
 import { useMemo, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -22,6 +23,7 @@ function today(): string {
 }
 
 export function CstForm({ ready }: CstFormProps) {
+  const visibleStudent = useStudentFilter()
   const { t } = useLocale()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -41,6 +43,7 @@ export function CstForm({ ready }: CstFormProps) {
   })
 
   const onSubmit = async (values: CstFormValues) => {
+    if (!visibleStudent(values.student)) { setSubmitError(t('studentHidden')); return }
     setSubmitError(null)
     setSuccessMessage(null)
     try {

@@ -1,3 +1,4 @@
+import { StudentFilter } from './students/StudentFilter'
 import { useGoogleAuth } from './auth/useGoogleAuth'
 import { SignInButton } from './auth/SignInButton'
 import { PagesTab } from './form/PagesTab'
@@ -37,7 +38,7 @@ function App() {
   }
 
   return (
-    <div className="relative flex min-h-svh flex-col items-center justify-start gap-2 bg-gray-50 px-4 py-3 sm:justify-center sm:gap-6 sm:py-8 print:min-h-0 print:justify-start print:gap-0 print:bg-white print:p-0">
+    <div className="relative flex min-h-svh flex-col items-center justify-start gap-2 bg-gray-50 px-4 pt-28 pb-3 sm:justify-center sm:gap-6 sm:pt-28 sm:pb-8 print:min-h-0 print:justify-start print:gap-0 print:bg-white print:p-0">
       <LanguageSwitcher className="absolute top-2 left-2 sm:top-4 sm:left-4 print:hidden" />
       {user && <UserMenu user={user} onSignOut={signOut} className="absolute top-2 right-2 sm:top-4 sm:right-4 print:hidden" />}
 
@@ -52,7 +53,7 @@ function App() {
           {!accessToken ? (
             <SignInButton onClick={signIn} disabled={!ready} />
           ) : (
-            <>
+            <StudentFilter>
               <div className="grid w-full max-w-4xl grid-cols-3 gap-1 rounded-md border border-gray-200 bg-white p-1 sm:grid-cols-8 print:hidden">
                 {APP_TABS.map((tab) => (
                   <button
@@ -87,7 +88,7 @@ function App() {
               ) : (
                 <AttendanceForm ready={ready} />
               )}
-            </>
+            </StudentFilter>
           )}
         </div>
       )}

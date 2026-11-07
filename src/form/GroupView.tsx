@@ -1,10 +1,12 @@
-﻿import { useEffect, useState } from 'react'
+import { useStudentFilter } from '../students/StudentFilterContext'
+import { useEffect, useState } from 'react'
 import { useLocale } from '../i18n/LocaleContext'
 import { fetchGroupStudents, updateStudentGroup, type GroupStudent } from '../sheets/rosterClient'
 import { SheetsAccessError } from '../sheets/sheetsClient'
 import { useQueryState } from '../url/queryState'
 
 export function GroupView({ ready }: { ready: boolean }) {
+  const visibleStudent = useStudentFilter()
   const { t } = useLocale()
   const [state, setQuery] = useQueryState()
   const group = state.tab === 'groups' ? state.group : ''
@@ -24,10 +26,10 @@ export function GroupView({ ready }: { ready: boolean }) {
     return () => { cancelled = true }
   }, [ready, t])
 
-  const groups = [...new Set((students ?? []).map((student) => student.group).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const groups = [...new Set((students ?? []).filter((student) => visibleStudent(student.name)).map((student) => student.group).filter(Boolean))].sort((a, b) => a.localeCompare(b))
   if (group && !groups.includes(group)) groups.push(group)
-  const members = (students ?? []).filter((student) => student.group === group && group)
-  const candidates = (students ?? []).filter((student) => student.group !== group)
+  const members = (students ?? []).filter((student) => student.group === group && group && visibleStudent(student.name))
+  const candidates = (students ?? []).filter((student) => student.group !== group && visibleStudent(student.name))
 
   async function changeGroup(student: GroupStudent, nextGroup: string) {
     setSaving(true)

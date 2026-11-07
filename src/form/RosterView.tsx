@@ -1,3 +1,4 @@
+import { useStudentFilter, useRefreshRoster } from '../students/StudentFilterContext'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   appendRosterStudent,
@@ -55,6 +56,8 @@ function rosterColumnLabel(
 }
 
 export function RosterView({ ready }: RosterViewProps) {
+  const visibleStudent = useStudentFilter()
+  const refreshRoster = useRefreshRoster()
   const { locale, t } = useLocale()
   const [state, setQuery] = useQueryState()
   const mode = state.tab === 'students' && state.sub === 'add' ? 'add' : 'list'
@@ -98,11 +101,12 @@ export function RosterView({ ready }: RosterViewProps) {
   const rows = useMemo(() => {
     if (!sheet) return []
     const normalizedQuery = query.trim().toLowerCase()
-    if (!normalizedQuery) return sheet.rows
-    return sheet.rows.filter((row) =>
+    const visibleRows = sheet.rows.filter((row) => visibleStudent(row[sheet.nameColumnIndex] ?? ''))
+    if (!normalizedQuery) return visibleRows
+    return visibleRows.filter((row) =>
       row.some((value) => value.toLowerCase().includes(normalizedQuery)),
     )
-  }, [query, sheet])
+  }, [query, sheet, visibleStudent])
 
   const columnIndexes = useMemo(() => {
     if (!sheet) return []
@@ -181,6 +185,7 @@ export function RosterView({ ready }: RosterViewProps) {
       await appendRosterStudent(values)
       const nextSheet = await fetchRosterSheet()
       setSheet(nextSheet)
+      refreshRoster(nextSheet)
       setFormValues({})
       setSuccessMessage(t('studentCreated', { student: studentName }))
       setQuery({ sub: 'list' }, 'push')

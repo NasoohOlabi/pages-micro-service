@@ -1,3 +1,4 @@
+import { useStudentFilter } from '../students/StudentFilterContext'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ATTENDANCE_STATUSES,
@@ -64,6 +65,7 @@ function StatusSelect({
 }
 
 export function AttendanceForm({ ready }: AttendanceFormProps) {
+  const visibleStudent = useStudentFilter()
   const { t } = useLocale()
   const [state, setQuery] = useQueryState()
   const mode: AttendanceMode = state.tab === 'attendance' && state.sub === 'group' ? 'group' : 'student'
@@ -91,7 +93,8 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
     fetchAttendanceSheet()
       .then((result) => {
         if (cancelled) return
-        setSheet(result)
+        const students = result.students.filter((row) => visibleStudent(row.student))
+        setSheet({ ...result, students, groups: [...new Set(students.map((row) => row.group).filter(Boolean))].sort((a, b) => a.localeCompare(b)) })
         setLoadError(null)
       })
       .catch((err) => {
@@ -103,19 +106,19 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
     return () => {
       cancelled = true
     }
-  }, [ready, t])
+  }, [ready, t, visibleStudent])
 
   const groupRows = useMemo<AttendanceStudentRow[]>(() => {
     if (!sheet || !group) return []
-    return sheet.students.filter((row) => row.group === group)
-  }, [sheet, group])
+    return sheet.students.filter((row) => row.group === group && visibleStudent(row.student))
+  }, [sheet, group, visibleStudent])
 
   const selectedStudentRows = useMemo<AttendanceStudentRow[]>(() => {
     if (!sheet) return []
     return selectedStudents
       .map((name) => findAttendanceStudent(sheet, name))
-      .filter((row): row is AttendanceStudentRow => Boolean(row))
-  }, [sheet, selectedStudents])
+      .filter((row): row is AttendanceStudentRow => !!row && visibleStudent(row.student))
+  }, [sheet, selectedStudents, visibleStudent])
 
   useEffect(() => {
     if (!sheet) return

@@ -1,3 +1,4 @@
+import { useStudentFilter } from '../students/StudentFilterContext'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { parseSheetRows, type SheetRowValues } from '../sheets/schema'
 import { fetchExistingRows, SheetsAccessError } from '../sheets/sheetsClient'
@@ -62,6 +63,7 @@ function formatIsoDate(iso: string, locale: Locale): string {
 }
 
 export function PagesStats({ ready }: PagesStatsProps) {
+  const visibleStudent = useStudentFilter()
   const { locale, t } = useLocale()
   const [state, setQuery] = useQueryState()
   const view = state.tab === 'pages' && state.sub === 'stats' ? state.view : 'students'
@@ -98,16 +100,16 @@ export function PagesStats({ ready }: PagesStatsProps) {
     }
   }, [ready, t])
 
-  const studentOptions = useMemo(() => (rows ? uniqueStudentNames(rows) : []), [rows])
+  const studentOptions = useMemo(() => (rows ? uniqueStudentNames(rows.filter((row) => visibleStudent(row.student))) : []), [rows, visibleStudent])
 
   const filtered = useMemo(() => {
     if (!rows) return []
-    return filterRows(rows, {
+    return filterRows(rows.filter((row) => visibleStudent(row.student)), {
       from,
       to,
       student: student || null,
     })
-  }, [from, rows, student, to])
+  }, [from, rows, student, to, visibleStudent])
 
   const pageCounts = useMemo(() => countByPage(filtered), [filtered])
   const studentCounts = useMemo(() => countByField(filtered, 'student'), [filtered])

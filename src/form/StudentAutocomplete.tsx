@@ -1,3 +1,4 @@
+import { useStudentFilter } from '../students/StudentFilterContext'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import Fuse from 'fuse.js'
 import { fetchRosterNames } from '../sheets/rosterClient'
@@ -16,6 +17,7 @@ interface StudentAutocompleteProps {
 
 export const StudentAutocomplete = forwardRef<HTMLInputElement, StudentAutocompleteProps>(
   function StudentAutocomplete({ id, value, onChange, onSelect, onBlur, ready }, forwardedRef) {
+    const visibleStudent = useStudentFilter()
     const { t } = useLocale()
     const [names, setNames] = useState<string[]>([])
     const [loadError, setLoadError] = useState<string | null>(null)
@@ -31,7 +33,7 @@ export const StudentAutocomplete = forwardRef<HTMLInputElement, StudentAutocompl
       let cancelled = false
       fetchRosterNames()
         .then((result) => {
-          if (!cancelled) setNames(result)
+          if (!cancelled) setNames(result.filter(visibleStudent))
         })
         .catch((err) => {
           if (cancelled) return
@@ -43,7 +45,7 @@ export const StudentAutocomplete = forwardRef<HTMLInputElement, StudentAutocompl
         cancelled = true
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [ready])
+    }, [ready, visibleStudent])
 
     useEffect(() => {
       function handleClickOutside(event: MouseEvent) {

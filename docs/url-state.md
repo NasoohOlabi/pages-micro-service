@@ -8,6 +8,8 @@ All reads and writes go through `src/url/queryState.ts` (`useQueryState`). Compo
 
 ## Owned keys
 
+The global `students=all` filter shows all students; absent means only roster students with column F (`نشط`) checked. This key persists across tabs. In active-only mode, students missing from the roster are excluded.
+
 Each tab owns a closed set of keys. Changing tabs drops every key the new tab does not own.
 
 | Tab | Keys | Defaults (omitted from the URL) |

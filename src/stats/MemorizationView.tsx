@@ -1,3 +1,4 @@
+import { useStudentFilter } from '../students/StudentFilterContext'
 import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
 import { useLocale } from '../i18n/LocaleContext'
@@ -9,6 +10,7 @@ import { englishKeysToArabic } from '../utils/keymap'
 import { buildMemorizationHistory, surahsForPages } from './memorization'
 
 export function MemorizationView({ ready }: { ready: boolean }) {
+  const visibleStudent = useStudentFilter()
   const { t } = useLocale()
   const [state, setQuery] = useQueryState()
   const query = state.tab === 'memorization' ? state.q : ''
@@ -36,8 +38,8 @@ export function MemorizationView({ ready }: { ready: boolean }) {
     return () => { cancelled = true }
   }, [ready, t])
 
-  const history = useMemo(() => buildMemorizationHistory(rows ?? []), [rows])
-  const groups = useMemo(() => [...new Set((roster ?? []).map((student) => student.group).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [roster])
+  const history = useMemo(() => buildMemorizationHistory((rows ?? []).filter((row) => visibleStudent(row.student))), [rows, visibleStudent])
+  const groups = useMemo(() => [...new Set((roster ?? []).map((student) => visibleStudent(student.name) ? student.group : '').filter(Boolean))].sort((a, b) => a.localeCompare(b)), [roster, visibleStudent])
   const filteredHistory = useMemo(() => {
     if (!group) return history
     const names = new Set((roster ?? []).filter((student) => student.group === group).map((student) => student.name.toLowerCase()))

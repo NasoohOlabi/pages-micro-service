@@ -6,6 +6,9 @@ export const RTL_LOCALES: Locale[] = ['ar']
 
 export const translations = {
   en: {
+    activeStudentsOnly: 'Active students only',
+    allStudents: 'All students',
+    studentHidden: 'Select an active student, or switch to All students.',
     appTitle: 'Quran Log',
     signedInAs: 'Signed in as {{email}}',
     signOut: 'Sign out',
@@ -165,6 +168,9 @@ export const translations = {
     statsCoverageMost: 'Most',
   },
   ar: {
+    activeStudentsOnly: 'الطلاب النشطون فقط',
+    allStudents: 'كل الطلاب',
+    studentHidden: 'اختر طالباً نشطاً أو انتقل إلى عرض كل الطلاب.',
     memorizationTab: 'سجل الحفظ',
     memorizationAllGroups: 'كل الحلقات',
     memorizationSurahs: 'السور',

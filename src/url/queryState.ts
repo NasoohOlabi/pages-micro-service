@@ -7,7 +7,7 @@ export type StatsView = 'students' | 'time' | 'teachers' | 'coverage'
 export type FinalsSort = 'score' | 'pages'
 export type HistoryMode = 'push' | 'replace'
 
-export type QueryState =
+type TabQueryState =
   | { tab: 'pages'; sub: 'log' }
   | { tab: 'pages'; sub: 'stats'; view: StatsView; from: string | null; to: string | null; student: string }
   | { tab: 'points' }
@@ -20,7 +20,10 @@ export type QueryState =
   | { tab: 'groups'; group: string }
   | { tab: 'finals'; factor: string; cst: string; sort: FinalsSort }
 
+export type QueryState = TabQueryState & { allStudents?: boolean }
+
 export type QueryPatch = {
+  allStudents?: boolean
   tab?: AppTab
   sub?: 'log' | 'stats' | 'student' | 'group' | 'list' | 'add'
   view?: StatsView
@@ -110,7 +113,7 @@ function pagesStatsDefaults(): QueryState {
   }
 }
 
-export function parseQueryState(search: string): QueryState {
+function parseTabQueryState(search: string): QueryState {
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
   const tab = params.get('tab')
   const sub = params.get('sub')
@@ -162,12 +165,17 @@ export function parseQueryState(search: string): QueryState {
   return DEFAULT_PAGES
 }
 
+export function parseQueryState(search: string): QueryState {
+  return { ...parseTabQueryState(search), allStudents: new URLSearchParams(search).get('students') === 'all' }
+}
+
 function currentHref(): string {
   return window.location.pathname + window.location.search
 }
 
 export function hrefFor(state: QueryState): string {
   const params = new URLSearchParams()
+  if (state.allStudents) params.set('students', 'all')
 
   if (state.tab !== 'pages') params.set('tab', state.tab)
 
@@ -294,7 +302,7 @@ function applyPatch(current: QueryState, patch: QueryPatch): QueryState {
   if (patch.sub !== undefined) {
     next = withSub(next, patch.sub)
   }
-  return withFields(next, patch)
+  return { ...withFields(next, patch), allStudents: patch.allStudents ?? current.allStudents }
 }
 
 function emit(next: QueryState) {

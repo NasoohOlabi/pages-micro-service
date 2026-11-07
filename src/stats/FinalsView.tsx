@@ -1,3 +1,4 @@
+import { useStudentFilter } from '../students/StudentFilterContext'
 import { useEffect, useMemo, useState } from 'react'
 import { parseSheetRows, type SheetRowValues } from '../sheets/schema'
 import { parsePointsRows, type PointsRowValues } from '../sheets/pointsSchema'
@@ -194,6 +195,7 @@ function rosterGroups(sheet: RosterSheet): Map<string, string> {
 }
 
 export function FinalsView({ ready }: FinalsViewProps) {
+  const visibleStudent = useStudentFilter()
   const { t } = useLocale()
   const [state, setQuery] = useQueryState()
   const pageFactor = state.tab === 'finals' ? state.factor : '10'
@@ -236,15 +238,15 @@ export function FinalsView({ ready }: FinalsViewProps) {
   const scoreStandings = useMemo(() => {
     if (!roster || !pageRows || !pointRows || !cstRows) return []
     return computeFinalsStandings({
-      names: rosterNames(roster),
+      names: rosterNames(roster).filter(visibleStudent),
       groups: rosterGroups(roster),
-      pageRows,
-      pointRows,
-      cstRows,
+      pageRows: pageRows.filter((row) => visibleStudent(row.student)),
+      pointRows: pointRows.filter((row) => visibleStudent(row.student)),
+      cstRows: cstRows.filter((row) => visibleStudent(row.student)),
       pageFactor: parsePageFactor(pageFactor),
       cstFactor: parsePageFactor(cstFactor),
     })
-  }, [cstFactor, cstRows, pageFactor, pageRows, pointRows, roster])
+  }, [cstFactor, cstRows, pageFactor, pageRows, pointRows, roster, visibleStudent])
 
   const pageStandings = useMemo(() => sortByPages(scoreStandings), [scoreStandings])
   const nameStandings = useMemo(() => sortByName(scoreStandings), [scoreStandings])
