@@ -5,7 +5,7 @@ import { parseCstRows, type CstRowValues } from '../sheets/cstSchema'
 import { fetchExistingRows, SheetsAccessError } from '../sheets/sheetsClient'
 import { fetchExistingPointRows } from '../sheets/pointsClient'
 import { fetchExistingCstRows } from '../sheets/cstClient'
-import { fetchRosterSheet, type RosterSheet } from '../sheets/rosterClient'
+import { fetchRosterSheet, rosterGroupColumnIndex, type RosterSheet } from '../sheets/rosterClient'
 import { useLocale } from '../i18n/LocaleContext'
 import type { TranslationKey } from '../i18n/translations'
 import { localIsoDate } from './aggregations'
@@ -183,8 +183,7 @@ function rosterNames(sheet: RosterSheet): string[] {
 }
 
 function rosterGroups(sheet: RosterSheet): Map<string, string> {
-  const headerIndex = sheet.headers.findIndex((header) => header === 'الحلقة')
-  const groupIndex = headerIndex === -1 ? 7 : headerIndex
+  const groupIndex = rosterGroupColumnIndex(sheet.headers)
   const groups = new Map<string, string>()
   for (const row of sheet.rows) {
     const name = row[sheet.nameColumnIndex]?.trim()

@@ -128,6 +128,24 @@ export function fetchRosterSheet(): Promise<RosterSheet> {
   return rosterSheetPromise
 }
 
+export function rosterGroupColumnIndex(headers: string[]): number {
+  const matches = headers.map((header, index) => ({ header: header.trim(), index }))
+    .filter(({ header }) => header === '\u062d\u0644\u0642\u0629' || header === '\u0627\u0644\u062d\u0644\u0642\u0629')
+  if (matches.length !== 1) throw new Error('Roster group column not found or ambiguous')
+  return matches[0].index
+}
+
+function indexToColumnLetter(index: number): string {
+  let value = index + 1
+  let result = ''
+  while (value > 0) {
+    value -= 1
+    result = String.fromCharCode(65 + value % 26) + result
+    value = Math.floor(value / 26)
+  }
+  return result
+}
+
 export interface GroupStudent {
   rowNumber: number
   name: string
@@ -144,10 +162,12 @@ export async function fetchGroupStudents(): Promise<GroupStudent[]> {
       }),
     )
     const nameIndex = columnLetterToIndex(config.rosterNameColumn)
-    return (response.result.values ?? []).slice(1).map((row, index) => ({
+    const values = response.result.values ?? []
+    const groupIndex = rosterGroupColumnIndex(values[0] ?? [])
+    return values.slice(1).map((row, index) => ({
       rowNumber: index + 2,
       name: String(row[nameIndex] ?? '').trim(),
-      group: String(row[7] ?? '').trim(),
+      group: String(row[groupIndex] ?? '').trim(),
     })).filter((row) => row.name)
   } catch (err) {
     handleRosterAccessError(err)
@@ -160,10 +180,15 @@ export async function updateStudentGroup(student: GroupStudent, group: string): 
     const row = current.find((item) => item.rowNumber === student.rowNumber)
     if (!row || row.name !== student.name || row.group !== student.group) throw new Error('Roster changed')
     const title = await resolveTabTitle()
+    const header = await withTokenRetry(() => window.gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: config.rosterSheetId,
+      range: `${quoteSheetTitle(title)}!A1:ZZ1`,
+    }))
+    const column = indexToColumnLetter(rosterGroupColumnIndex(header.result.values?.[0] ?? []))
     await withTokenRetry(() =>
       window.gapi.client.sheets.spreadsheets.values.update({
         spreadsheetId: config.rosterSheetId,
-        range: `${quoteSheetTitle(title)}!H${student.rowNumber}`,
+        range: `${quoteSheetTitle(title)}!${column}${student.rowNumber}`,
         valueInputOption: 'RAW',
         resource: { values: [[group]] },
       }),
