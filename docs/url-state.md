@@ -20,6 +20,7 @@ Each tab owns a closed set of keys. Changing tabs drops every key the new tab do
 | cst | `tab` | none besides `tab=cst` |
 | attendance | `tab`, `sub`, `date`, `group` | `sub` absent = student, `date` absent = today, `group` only when `sub=group` |
 | students | `tab`, `sub`, `q` | `sub` absent = list, `q` absent = no filter |
+| activation | `tab`, `q` | Always lists active and inactive students; `q` absent = no search |
 | groups | `tab`, `group` | `group` absent = no selection |
 | finals | `tab`, `factor`, `cst`, `sort` | `factor` absent = `10`, `cst` absent = `300`, `sort` absent = `score` |
 

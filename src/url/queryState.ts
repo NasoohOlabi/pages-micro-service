@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-export const APP_TABS = ['pages', 'memorization', 'points', 'cst', 'attendance', 'students', 'groups', 'finals'] as const
+export const APP_TABS = ['pages', 'memorization', 'points', 'cst', 'attendance', 'students', 'groups', 'activation', 'finals'] as const
 export type AppTab = (typeof APP_TABS)[number]
 
 export type StatsView = 'students' | 'time' | 'teachers' | 'coverage'
@@ -18,6 +18,7 @@ type TabQueryState =
   | { tab: 'students'; sub: 'list'; q: string }
   | { tab: 'students'; sub: 'add'; q: string }
   | { tab: 'groups'; group: string }
+  | { tab: 'activation'; q: string }
   | { tab: 'finals'; factor: string; cst: string; sort: FinalsSort }
 
 export type QueryState = TabQueryState & { allStudents?: boolean }
@@ -90,6 +91,8 @@ function defaultsFor(tab: AppTab): QueryState {
       return { tab: 'attendance', sub: 'student', date: localIsoDate() }
     case 'students':
       return { tab: 'students', sub: 'list', q: '' }
+    case 'activation':
+      return { tab: 'activation', q: '' }
     case 'groups':
       return { tab: 'groups', group: '' }
     case 'finals':
@@ -121,6 +124,8 @@ function parseTabQueryState(search: string): QueryState {
   if (tab === 'points') return { tab: 'points' }
 
   if (tab === 'memorization') return { tab: 'memorization', q: params.get('q') ?? '', group: params.get('group') ?? '' }
+
+  if (tab === 'activation') return { tab: 'activation', q: params.get('q') ?? '' }
 
   if (tab === 'cst') return { tab: 'cst' }
 
@@ -208,6 +213,9 @@ export function hrefFor(state: QueryState): string {
       if (state.sub === 'add') params.set('sub', 'add')
       if (state.q) params.set('q', state.q)
       break
+    case 'activation':
+      if (state.q) params.set('q', state.q)
+      break
     case 'groups':
       if (state.group) params.set('group', state.group)
       break
@@ -276,7 +284,7 @@ function withFields(state: QueryState, patch: QueryPatch): QueryState {
 
   if (state.tab === 'memorization') return { ...state, q: patch.q ?? state.q, group: patch.group ?? state.group }
 
-  if (state.tab === 'students') {
+  if (state.tab === 'students' || state.tab === 'activation') {
     return { ...state, q: patch.q ?? state.q }
   }
 

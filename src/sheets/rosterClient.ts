@@ -1,6 +1,7 @@
 import { config } from '../config'
 import { withTokenRetry } from '../auth/token'
 import { SheetsAccessError } from './sheetsClient'
+import { isActiveStudent } from '../students/visibility'
 
 let rosterPromise: Promise<string[]> | null = null
 let rosterSheetPromise: Promise<RosterSheet> | null = null
@@ -9,6 +10,47 @@ export interface RosterSheet {
   headers: string[]
   rows: string[][]
   nameColumnIndex: number
+}
+
+export interface ActivationStudent {
+  rowNumber: number
+  name: string
+  active: boolean
+}
+
+export async function fetchActivationStudents(): Promise<ActivationStudent[]> {
+  try {
+    const title = await resolveTabTitle()
+    const response = await withTokenRetry(() => window.gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: config.rosterSheetId,
+      range: `${quoteSheetTitle(title)}!A:ZZ`,
+    }))
+    const nameIndex = columnLetterToIndex(config.rosterNameColumn)
+    return (response.result.values ?? []).slice(1).map((row, index) => ({
+      rowNumber: index + 2,
+      name: String(row[nameIndex] ?? '').trim(),
+      active: isActiveStudent(String(row[5] ?? '')),
+    })).filter((student) => student.name)
+  } catch (err) {
+    handleRosterAccessError(err)
+  }
+}
+
+export async function updateStudentActive(student: ActivationStudent): Promise<void> {
+  try {
+    const current = (await fetchActivationStudents()).find((row) => row.rowNumber === student.rowNumber)
+    if (!current || current.name !== student.name || current.active !== student.active) throw new Error('Roster changed')
+    const title = await resolveTabTitle()
+    await withTokenRetry(() => window.gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId: config.rosterSheetId,
+      range: `${quoteSheetTitle(title)}!F${student.rowNumber}`,
+      valueInputOption: 'USER_ENTERED',
+      resource: { values: [[student.active ? 'FALSE' : 'TRUE']] },
+    }))
+    rosterSheetPromise = null
+  } catch (err) {
+    handleRosterAccessError(err)
+  }
 }
 
 async function resolveTabTitle(): Promise<string> {
