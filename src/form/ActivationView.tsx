@@ -1,48 +1,28 @@
-import { useEffect, useState } from 'react'
+import { useQuery, useMutation } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useLocale } from '../i18n/LocaleContext'
-import { fetchActivationStudents, fetchRosterSheet, updateStudentActive, type ActivationStudent } from '../sheets/rosterClient'
+import { rosterQueryOptions, rosterStudents, updateStudentActive, type ActivationStudent } from '../sheets/rosterClient'
 import { SheetsAccessError } from '../sheets/sheetsClient'
-import { useRefreshRoster } from '../students/StudentFilterContext'
 import { useQueryState } from '../url/queryState'
 
 export function ActivationView({ ready }: { ready: boolean }) {
   const { t } = useLocale()
-  const refreshRoster = useRefreshRoster()
   const [state, setQuery] = useQueryState()
   const query = state.tab === 'activation' ? state.q : ''
-  const [students, setStudents] = useState<ActivationStudent[] | null>(null)
-  const [saving, setSaving] = useState<number | null>(null)
+  const rosterQuery = useQuery({ ...rosterQueryOptions, enabled: ready, select: rosterStudents })
+  const students = rosterQuery.data ?? null
+  const mutation = useMutation({ mutationFn: updateStudentActive })
+  const saving = mutation.isPending ? mutation.variables.rowNumber : null
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [attempt, setAttempt] = useState(0)
-  useEffect(() => {
-    if (!ready) return
-    let cancelled = false
-    setError('')
-    Promise.all([fetchActivationStudents(), fetchRosterSheet()]).then(([rows, sheet]) => {
-      if (!cancelled) {
-        setStudents(rows)
-        refreshRoster(sheet)
-      }
-    }).catch((err: unknown) => {
-      if (!cancelled) setError(err instanceof SheetsAccessError ? err.message : t('rosterLoadError'))
-    })
-    return () => { cancelled = true }
-  }, [ready, t, attempt, refreshRoster])
-
   async function toggle(student: ActivationStudent) {
-    setSaving(student.rowNumber)
     setError('')
     setSuccess('')
     try {
-      await updateStudentActive(student)
-      setStudents(await fetchActivationStudents())
-      refreshRoster(await fetchRosterSheet())
+      await mutation.mutateAsync(student)
       setSuccess(t('activationSaved', { student: student.name }))
     } catch (err) {
       setError(err instanceof SheetsAccessError ? err.message : t('activationSaveError'))
-    } finally {
-      setSaving(null)
     }
   }
 
@@ -52,9 +32,10 @@ export function ActivationView({ ready }: { ready: boolean }) {
       <p className="text-sm text-gray-600">{t('activationDescription')}</p>
       <label htmlFor="activation-search" className="text-sm font-medium text-gray-700">{t('rosterSearchLabel')}</label>
       <input id="activation-search" type="search" value={query} onChange={(event) => setQuery({ q: event.target.value }, 'replace')} className="w-full rounded-md border border-gray-300 px-3 py-2" />
-      {error && <div className="flex items-center gap-3"><p role="alert" className="text-sm text-red-600">{error}</p><button type="button" disabled={saving !== null} onClick={() => setAttempt((value) => value + 1)} className="rounded border border-gray-300 px-3 py-2 text-sm disabled:opacity-50">{t('retryLoad')}</button></div>}
+      {rosterQuery.error && <p role="alert" className="text-sm text-red-600">{rosterQuery.error instanceof SheetsAccessError ? rosterQuery.error.message : t('rosterLoadError')}</p>}
+      {(error || rosterQuery.error) && <div className="flex items-center gap-3"><p role="alert" className="text-sm text-red-600">{error}</p><button type="button" disabled={saving !== null} onClick={() => void rosterQuery.refetch()} className="rounded border border-gray-300 px-3 py-2 text-sm disabled:opacity-50">{t('retryLoad')}</button></div>}
       {success && <p role="status" className="text-sm text-green-700">{success}</p>}
-      {!students && !error ? <p role="status" className="text-sm text-gray-500">{t('rosterLoading')}</p> : students && (
+      {!students && !error && !rosterQuery.error ? <p role="status" className="text-sm text-gray-500">{t('rosterLoading')}</p> : students && (
         matches.length === 0 ? <p className="text-sm text-gray-500">{t('rosterNoMatches')}</p> :
         <ul className="divide-y divide-gray-200">{matches.map((student) => (
           <li key={student.rowNumber} className="flex items-center justify-between gap-3 py-3">

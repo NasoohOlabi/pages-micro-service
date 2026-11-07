@@ -1,3 +1,5 @@
+import { queryOptions } from '@tanstack/react-query'
+import { queryClient, cacheSession } from '../queryClient'
 import { config } from '../config'
 import { withSheetsAccessErrorHandling } from './sheetsClient'
 
@@ -69,25 +71,42 @@ export function formatAttendanceDate(value: string): string {
   return `${WEEKDAYS[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}`
 }
 
-export async function fetchAttendanceSheet(): Promise<AttendanceSheet> {
-  return withSheetsAccessErrorHandling(async () => {
+function attendanceFromRows(rows: string[][]): AttendanceSheet {
+  const students = rows.slice(1).map((row, index) => ({
+    rowNumber: index + 2,
+    student: row[STUDENT_COLUMN_INDEX]?.trim() ?? '',
+    group: row[GROUP_COLUMN_INDEX]?.trim() ?? '',
+    values: row,
+  })).filter((row) => row.student)
+  const groups = [...new Set(students.map((row) => row.group).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  return { rows, students, groups }
+}
+
+export const attendanceQueryOptions = queryOptions({
+  queryKey: ['attendance', config.attendanceSheetId, config.attendanceSheetName],
+  staleTime: 30_000,
+  queryFn: () => withSheetsAccessErrorHandling(async () => {
     const response = await window.gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId: config.attendanceSheetId,
       range: `${quoteSheetTitle(config.attendanceSheetName)}!${SHEET_RANGE}`,
     })
-    const rows = response.result.values ?? []
-    const students = rows
-      .slice(1)
-      .map((row, index) => ({
-        rowNumber: index + 2,
-        student: row[STUDENT_COLUMN_INDEX]?.trim() ?? '',
-        group: row[GROUP_COLUMN_INDEX]?.trim() ?? '',
-        values: row,
-      }))
-      .filter((row) => row.student)
-    const groups = Array.from(new Set(students.map((row) => row.group).filter(Boolean)))
-      .sort((a, b) => a.localeCompare(b))
-    return { rows, students, groups }
+    return attendanceFromRows(response.result.values ?? [])
+  }),
+})
+
+export function fetchAttendanceSheet(fresh = false): Promise<AttendanceSheet> {
+  return queryClient.fetchQuery({ ...attendanceQueryOptions, ...(fresh ? { staleTime: 0 } : {}) })
+}
+
+function patchAttendanceCell(session: number, rowNumber: number, column: number, value: string) {
+  if (session !== cacheSession) return
+  queryClient.setQueryData(attendanceQueryOptions.queryKey, (sheet) => {
+    if (!sheet) return sheet
+    const rows = [...sheet.rows]
+    const row = [...(rows[rowNumber - 1] ?? [])]
+    row[column] = value
+    rows[rowNumber - 1] = row
+    return attendanceFromRows(rows)
   })
 }
 
@@ -108,6 +127,7 @@ function nextDateColumn(rows: string[][]): number {
 }
 
 async function ensureDateColumn(sheet: AttendanceSheet, dateLabel: string): Promise<number> {
+  const session = cacheSession
   const existingColumn = findDateColumn(sheet.rows, dateLabel)
   if (existingColumn !== null) return existingColumn
 
@@ -120,6 +140,7 @@ async function ensureDateColumn(sheet: AttendanceSheet, dateLabel: string): Prom
       resource: { values: [[dateLabel]] },
     }),
   )
+  patchAttendanceCell(session, 1, columnIndex, dateLabel)
   return columnIndex
 }
 
@@ -128,6 +149,7 @@ async function updateAttendanceCell(
   columnIndex: number,
   status: AttendanceStatus,
 ): Promise<void> {
+  const session = cacheSession
   await withSheetsAccessErrorHandling(() =>
     window.gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId: config.attendanceSheetId,
@@ -136,6 +158,7 @@ async function updateAttendanceCell(
       resource: { values: [[status]] },
     }),
   )
+  patchAttendanceCell(session, rowNumber, columnIndex, status)
 }
 
 export function findAttendanceStudent(
@@ -185,7 +208,7 @@ export async function saveStudentAttendance(
   date: string,
   status: AttendanceStatus,
 ): Promise<void> {
-  const sheet = await fetchAttendanceSheet()
+  const sheet = await fetchAttendanceSheet(true)
   const row = findAttendanceStudent(sheet, student)
   if (!row) throw new Error('Student was not found in the attendance sheet.')
 
@@ -197,7 +220,7 @@ export async function saveGroupAttendance(
   date: string,
   updates: AttendanceUpdate[],
 ): Promise<void> {
-  const sheet = await fetchAttendanceSheet()
+  const sheet = await fetchAttendanceSheet(true)
   const columnIndex = await ensureDateColumn(sheet, formatAttendanceDate(date))
   for (const update of updates) {
     await updateAttendanceCell(update.rowNumber, columnIndex, update.status)

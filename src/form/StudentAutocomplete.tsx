@@ -1,7 +1,8 @@
+import { useQuery } from '@tanstack/react-query'
 import { useStudentFilter } from '../students/StudentFilterContext'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import Fuse from 'fuse.js'
-import { fetchRosterNames } from '../sheets/rosterClient'
+import { rosterQueryOptions, rosterStudents } from '../sheets/rosterClient'
 import { SheetsAccessError } from '../sheets/sheetsClient'
 import { englishKeysToArabic } from '../utils/keymap'
 import { useLocale } from '../i18n/LocaleContext'
@@ -19,33 +20,15 @@ export const StudentAutocomplete = forwardRef<HTMLInputElement, StudentAutocompl
   function StudentAutocomplete({ id, value, onChange, onSelect, onBlur, ready }, forwardedRef) {
     const visibleStudent = useStudentFilter()
     const { t } = useLocale()
-    const [names, setNames] = useState<string[]>([])
-    const [loadError, setLoadError] = useState<string | null>(null)
+    const rosterQuery = useQuery({ ...rosterQueryOptions, enabled: ready, select: rosterStudents })
+    const names = useMemo(() => [...new Set((rosterQuery.data ?? []).map((student) => student.name).filter(visibleStudent))], [rosterQuery.data, visibleStudent])
+    const loadError = rosterQuery.error ? rosterQuery.error instanceof SheetsAccessError ? rosterQuery.error.message : t('rosterLoadError') : null
     const [isOpen, setIsOpen] = useState(false)
     const [highlightedIndex, setHighlightedIndex] = useState(0)
     const containerRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
 
     useImperativeHandle(forwardedRef, () => inputRef.current as HTMLInputElement)
-
-    useEffect(() => {
-      if (!ready) return
-      let cancelled = false
-      fetchRosterNames()
-        .then((result) => {
-          if (!cancelled) setNames(result.filter(visibleStudent))
-        })
-        .catch((err) => {
-          if (cancelled) return
-          setLoadError(
-            err instanceof SheetsAccessError ? err.message : t('rosterLoadError'),
-          )
-        })
-      return () => {
-        cancelled = true
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [ready, visibleStudent])
 
     useEffect(() => {
       function handleClickOutside(event: MouseEvent) {

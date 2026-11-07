@@ -13,6 +13,7 @@ import {
 import { config } from '../config'
 import { registerTokenRefresher } from './token'
 import { useLocale } from '../i18n/LocaleContext'
+import { setQueryUser } from '../queryClient'
 
 const GAPI_SRC = 'https://apis.google.com/js/api.js'
 const GIS_SRC = 'https://accounts.google.com/gsi/client'
@@ -280,6 +281,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
         unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
           if (cancelled) return
           userRef.current = firebaseUser
+          setQueryUser(firebaseUser?.email ?? null)
 
           if (!firebaseUser) {
             clearToken()
@@ -362,6 +364,7 @@ export function useGoogleAuth(): UseGoogleAuthResult {
   }, [installToken, silentRefresh, t])
 
   const signOut = useCallback(() => {
+    setQueryUser(null)
     firebaseSignOut(auth).catch((err) => console.warn('[auth] firebase sign-out failed', err))
     clearToken()
     setUser(null)

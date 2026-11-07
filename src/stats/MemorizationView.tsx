@@ -1,10 +1,11 @@
+import { useQuery } from '@tanstack/react-query'
+import { memorizationQueryOptions } from '../sheets/logQueries'
 import { useStudentFilter } from '../students/StudentFilterContext'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import Fuse from 'fuse.js'
 import { useLocale } from '../i18n/LocaleContext'
-import { fetchGroupStudents, type GroupStudent } from '../sheets/rosterClient'
-import { fetchExistingRows, SheetsAccessError } from '../sheets/sheetsClient'
-import { parseSheetRows, type SheetRowValues } from '../sheets/schema'
+import { rosterQueryOptions, rosterGroups } from '../sheets/rosterClient'
+import { SheetsAccessError } from '../sheets/sheetsClient'
 import { useQueryState } from '../url/queryState'
 import { englishKeysToArabic } from '../utils/keymap'
 import { buildMemorizationHistory, surahsForPages } from './memorization'
@@ -15,28 +16,12 @@ export function MemorizationView({ ready }: { ready: boolean }) {
   const [state, setQuery] = useQueryState()
   const query = state.tab === 'memorization' ? state.q : ''
   const group = state.tab === 'memorization' ? state.group : ''
-  const [roster, setRoster] = useState<GroupStudent[] | null>(null)
-  const [rosterError, setRosterError] = useState<string | null>(null)
-  const [rows, setRows] = useState<SheetRowValues[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!ready) return
-    let cancelled = false
-    fetchGroupStudents().then((students) => {
-      if (!cancelled) { setRoster(students); setRosterError(null) }
-    }).catch((err: unknown) => {
-      if (!cancelled) setRosterError(err instanceof SheetsAccessError ? err.message : t('rosterLoadError'))
-    })
-    fetchExistingRows({ includeArchived: true })
-      .then((raw) => {
-        if (!cancelled) setRows(parseSheetRows(raw))
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof SheetsAccessError ? err.message : t('statsLoadError'))
-      })
-    return () => { cancelled = true }
-  }, [ready, t])
+  const rosterQuery = useQuery({ ...rosterQueryOptions, enabled: ready, select: rosterGroups })
+  const pagesQuery = useQuery({ ...memorizationQueryOptions, enabled: ready })
+  const roster = rosterQuery.data ?? null
+  const rows = pagesQuery.data ?? null
+  const rosterError = rosterQuery.error ? rosterQuery.error instanceof SheetsAccessError ? rosterQuery.error.message : t('rosterLoadError') : null
+  const error = pagesQuery.error ? pagesQuery.error instanceof SheetsAccessError ? pagesQuery.error.message : t('statsLoadError') : null
 
   const history = useMemo(() => buildMemorizationHistory((rows ?? []).filter((row) => visibleStudent(row.student))), [rows, visibleStudent])
   const groups = useMemo(() => [...new Set((roster ?? []).map((student) => visibleStudent(student.name) ? student.group : '').filter(Boolean))].sort((a, b) => a.localeCompare(b)), [roster, visibleStudent])

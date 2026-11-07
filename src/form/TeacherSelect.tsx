@@ -1,5 +1,6 @@
-import { forwardRef, useEffect, useState } from 'react'
-import { fetchTeachers, findTeacherByEmail, type Teacher } from '../sheets/teachersClient'
+import { useQuery } from '@tanstack/react-query'
+import { forwardRef, useEffect } from 'react'
+import { teachersQueryOptions, findTeacherByEmail } from '../sheets/teachersClient'
 import { SheetsAccessError } from '../sheets/sheetsClient'
 import { useLocale } from '../i18n/LocaleContext'
 
@@ -16,32 +17,15 @@ interface TeacherSelectProps {
 export const TeacherSelect = forwardRef<HTMLSelectElement, TeacherSelectProps>(
   function TeacherSelect({ id, value, onChange, onBlur, userEmail, hasUserSetValue, ready }, ref) {
     const { t } = useLocale()
-    const [teachers, setTeachers] = useState<Teacher[]>([])
-    const [loadError, setLoadError] = useState<string | null>(null)
-
+    const teachersQuery = useQuery({ ...teachersQueryOptions, enabled: ready })
+    const teachers = teachersQuery.data ?? []
+    const loadError = teachersQuery.error ? teachersQuery.error instanceof SheetsAccessError ? teachersQuery.error.message : t('teacherLoadError') : null
     useEffect(() => {
-      if (!ready) return
-      let cancelled = false
-      fetchTeachers()
-        .then((result) => {
-          if (cancelled) return
-          setTeachers(result)
-          if (!hasUserSetValue) {
-            const defaultTeacher = findTeacherByEmail(result, userEmail)
-            if (defaultTeacher) onChange(defaultTeacher.name)
-          }
-        })
-        .catch((err) => {
-          if (cancelled) return
-          setLoadError(
-            err instanceof SheetsAccessError ? err.message : t('teacherLoadError'),
-          )
-        })
-      return () => {
-        cancelled = true
+      if (!hasUserSetValue && teachersQuery.data) {
+        const teacher = findTeacherByEmail(teachersQuery.data, userEmail)
+        if (teacher && value !== teacher.name) onChange(teacher.name)
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userEmail, ready])
+    }, [teachersQuery.data, userEmail, hasUserSetValue, onChange, value])
 
     return (
       <div>

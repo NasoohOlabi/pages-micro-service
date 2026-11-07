@@ -1,14 +1,14 @@
+import { useQuery } from '@tanstack/react-query'
 import { useStudentFilter } from '../students/StudentFilterContext'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ATTENDANCE_STATUSES,
   attendanceStatusForDate,
-  fetchAttendanceSheet,
+  attendanceQueryOptions,
   findAttendanceStudent,
   formatAttendanceDate,
   saveGroupAttendance,
   saveStudentAttendance,
-  type AttendanceSheet,
   type AttendanceStatus,
   type AttendanceStudentRow,
 } from '../sheets/attendanceClient'
@@ -71,8 +71,13 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
   const mode: AttendanceMode = state.tab === 'attendance' && state.sub === 'group' ? 'group' : 'student'
   const date = state.tab === 'attendance' ? state.date : ''
   const group = state.tab === 'attendance' && state.sub === 'group' ? state.group : ''
-  const [sheet, setSheet] = useState<AttendanceSheet | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const attendanceQuery = useQuery({ ...attendanceQueryOptions, enabled: ready })
+  const sheet = useMemo(() => {
+    if (!attendanceQuery.data) return null
+    const students = attendanceQuery.data.students.filter((row) => visibleStudent(row.student))
+    return { ...attendanceQuery.data, students, groups: [...new Set(students.map((row) => row.group).filter(Boolean))].sort((a, b) => a.localeCompare(b)) }
+  }, [attendanceQuery.data, visibleStudent])
+  const loadError = attendanceQuery.error ? attendanceQuery.error instanceof SheetsAccessError ? attendanceQuery.error.message : t('attendanceLoadError') : null
   const [studentQuery, setStudentQuery] = useState('')
   const [selectedStudents, setSelectedStudents] = useState<string[]>([])
   const [studentStatus, setStudentStatus] = useState<AttendanceStatus>(DEFAULT_STATUS)
@@ -86,27 +91,6 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
     if (state.tab !== 'attendance' || state.sub !== 'group' || state.group || !sheet?.groups[0]) return
     setQuery({ group: sheet.groups[0] }, 'replace')
   }, [setQuery, sheet, state])
-
-  useEffect(() => {
-    if (!ready) return
-    let cancelled = false
-    fetchAttendanceSheet()
-      .then((result) => {
-        if (cancelled) return
-        const students = result.students.filter((row) => visibleStudent(row.student))
-        setSheet({ ...result, students, groups: [...new Set(students.map((row) => row.group).filter(Boolean))].sort((a, b) => a.localeCompare(b)) })
-        setLoadError(null)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setLoadError(
-          err instanceof SheetsAccessError ? err.message : t('attendanceLoadError'),
-        )
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [ready, t, visibleStudent])
 
   const groupRows = useMemo<AttendanceStudentRow[]>(() => {
     if (!sheet || !group) return []
@@ -140,11 +124,6 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
     setSelectedStudents((current) => current.filter((entry) => entry !== name))
   }
 
-  const refreshSheet = async () => {
-    const nextSheet = await fetchAttendanceSheet()
-    setSheet(nextSheet)
-  }
-
   const handleStudentSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setSubmitError(null)
@@ -165,7 +144,6 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
           selectedStudentRows.map((row) => ({ rowNumber: row.rowNumber, status: studentStatus })),
         )
       }
-      await refreshSheet()
       setSuccessMessage(
         selectedStudentRows.length === 1
           ? t('attendanceStudentSaved', { student: selectedStudentRows[0].student })
@@ -197,7 +175,6 @@ export function AttendanceForm({ ready }: AttendanceFormProps) {
           status: groupStatuses[row.rowNumber] ?? DEFAULT_STATUS,
         })),
       )
-      await refreshSheet()
       setSuccessMessage(t('attendanceGroupSaved', { count: groupRows.length }))
     } catch (err) {
       setSubmitError(

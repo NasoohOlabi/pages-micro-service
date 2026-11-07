@@ -1,12 +1,9 @@
+import { useQuery } from '@tanstack/react-query'
+import { pagesQueryOptions, pointsQueryOptions, cstQueryOptions } from '../sheets/logQueries'
 import { useStudentFilter } from '../students/StudentFilterContext'
-import { useEffect, useMemo, useState } from 'react'
-import { parseSheetRows, type SheetRowValues } from '../sheets/schema'
-import { parsePointsRows, type PointsRowValues } from '../sheets/pointsSchema'
-import { parseCstRows, type CstRowValues } from '../sheets/cstSchema'
-import { fetchExistingRows, SheetsAccessError } from '../sheets/sheetsClient'
-import { fetchExistingPointRows } from '../sheets/pointsClient'
-import { fetchExistingCstRows } from '../sheets/cstClient'
-import { fetchRosterSheet, rosterGroupColumnIndex, type RosterSheet } from '../sheets/rosterClient'
+import { useMemo } from 'react'
+import { SheetsAccessError } from '../sheets/sheetsClient'
+import { rosterQueryOptions, rosterGroupColumnIndex, type RosterSheet } from '../sheets/rosterClient'
 import { useLocale } from '../i18n/LocaleContext'
 import type { TranslationKey } from '../i18n/translations'
 import { localIsoDate } from './aggregations'
@@ -201,39 +198,17 @@ export function FinalsView({ ready }: FinalsViewProps) {
   const pageFactor = state.tab === 'finals' ? state.factor : '10'
   const cstFactor = state.tab === 'finals' ? state.cst : '300'
   const sort: FinalsSort = state.tab === 'finals' ? state.sort : 'score'
-  const [roster, setRoster] = useState<RosterSheet | null>(null)
-  const [pageRows, setPageRows] = useState<SheetRowValues[] | null>(null)
-  const [pointRows, setPointRows] = useState<PointsRowValues[] | null>(null)
-  const [cstRows, setCstRows] = useState<CstRowValues[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-
-  useEffect(() => {
-    if (!ready) return
-    let cancelled = false
-    setIsLoading(true)
-    Promise.all([fetchRosterSheet(), fetchExistingRows(), fetchExistingPointRows(), fetchExistingCstRows()])
-      .then(([sheet, rawPages, rawPoints, rawCst]) => {
-        if (cancelled) return
-        setRoster(sheet)
-        setPageRows(parseSheetRows(rawPages))
-        setPointRows(parsePointsRows(rawPoints))
-        setCstRows(parseCstRows(rawCst))
-        setLoadError(null)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setLoadError(
-          err instanceof SheetsAccessError ? err.message : t('finalsLoadError'),
-        )
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [ready, t])
+  const rosterQuery = useQuery({ ...rosterQueryOptions, enabled: ready })
+  const pagesQuery = useQuery({ ...pagesQueryOptions, enabled: ready })
+  const pointsQuery = useQuery({ ...pointsQueryOptions, enabled: ready })
+  const cstQuery = useQuery({ ...cstQueryOptions, enabled: ready })
+  const roster = rosterQuery.data ?? null
+  const pageRows = pagesQuery.data ?? null
+  const pointRows = pointsQuery.data ?? null
+  const cstRows = cstQuery.data ?? null
+  const error = rosterQuery.error ?? pagesQuery.error ?? pointsQuery.error ?? cstQuery.error
+  const loadError = error ? error instanceof SheetsAccessError ? error.message : t('finalsLoadError') : null
+  const isLoading = rosterQuery.isLoading || pagesQuery.isLoading || pointsQuery.isLoading || cstQuery.isLoading
 
   const scoreStandings = useMemo(() => {
     if (!roster || !pageRows || !pointRows || !cstRows) return []

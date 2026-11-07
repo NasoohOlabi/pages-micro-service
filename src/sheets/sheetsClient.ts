@@ -1,3 +1,5 @@
+import { queryOptions } from '@tanstack/react-query'
+import { queryClient, cacheSession } from '../queryClient'
 import { config } from '../config'
 import { withTokenRetry } from '../auth/token'
 import { COLUMN_ORDER, UNIQUE_KEY, rowToValues, type SheetRowValues } from './schema'
@@ -20,19 +22,32 @@ export async function withSheetsAccessErrorHandling<T>(fn: () => Promise<T>): Pr
   }
 }
 
-export async function fetchSheetDataRows(range: string, includeArchived = false): Promise<string[][]> {
-  return withSheetsAccessErrorHandling(async () => {
-    const sheetTitle = range.slice(0, range.lastIndexOf('!'))
-    const response = await window.gapi.client.sheets.spreadsheets.values.get({
-      spreadsheetId: config.sheetId,
-      range: `${sheetTitle}!A1:ZZ`,
-    })
-    return sheetDataRows(response.result.values ?? [], includeArchived)
+export function sheetValuesQueryOptions(range: string) {
+  const title = range.slice(0, range.lastIndexOf('!'))
+  return queryOptions({
+    queryKey: ['sheet-values', config.sheetId, title],
+    queryFn: () => withSheetsAccessErrorHandling(async () => {
+      const response = await window.gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: config.sheetId,
+        range: `${title}!A1:ZZ`,
+      })
+      return response.result.values ?? []
+    }),
   })
 }
 
-export async function fetchExistingRows({ includeArchived = false }: { includeArchived?: boolean } = {}): Promise<string[][]> {
-  return fetchSheetDataRows(config.sheetRange, includeArchived)
+export async function fetchSheetDataRows(range: string, includeArchived = false, fresh = false): Promise<string[][]> {
+  const options = sheetValuesQueryOptions(range)
+  const values = await queryClient.fetchQuery({ ...options, ...(fresh ? { staleTime: 0 } : {}) })
+  return sheetDataRows(values, includeArchived)
+}
+
+export async function fetchExistingRows({ includeArchived = false, fresh = false }: { includeArchived?: boolean; fresh?: boolean } = {}): Promise<string[][]> {
+  return fetchSheetDataRows(config.sheetRange, includeArchived, fresh)
+}
+
+export async function invalidateSheetRows(range: string, session: number) {
+  if (session === cacheSession) await queryClient.invalidateQueries({ queryKey: sheetValuesQueryOptions(range).queryKey })
 }
 
 function normalize(value: string | undefined): string {
@@ -50,6 +65,7 @@ export function findDuplicatePages(rows: string[][], values: SheetRowValues[]): 
 }
 
 export async function appendRows(rows: SheetRowValues[]): Promise<void> {
+  const session = cacheSession
   await withSheetsAccessErrorHandling(() =>
     window.gapi.client.sheets.spreadsheets.values.append({
       spreadsheetId: config.sheetId,
@@ -58,4 +74,5 @@ export async function appendRows(rows: SheetRowValues[]): Promise<void> {
       resource: { values: rows.map(rowToValues) },
     }),
   )
+  await invalidateSheetRows(config.sheetRange, session)
 }

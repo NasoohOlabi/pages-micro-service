@@ -1,7 +1,8 @@
+import { useQuery } from '@tanstack/react-query'
+import { pagesQueryOptions } from '../sheets/logQueries'
 import { useStudentFilter } from '../students/StudentFilterContext'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { parseSheetRows, type SheetRowValues } from '../sheets/schema'
-import { fetchExistingRows, SheetsAccessError } from '../sheets/sheetsClient'
+import { SheetsAccessError } from '../sheets/sheetsClient'
 import { useLocale } from '../i18n/LocaleContext'
 import type { Locale, TranslationKey } from '../i18n/translations'
 import {
@@ -70,35 +71,12 @@ export function PagesStats({ ready }: PagesStatsProps) {
   const from = state.tab === 'pages' && state.sub === 'stats' ? state.from : null
   const to = state.tab === 'pages' && state.sub === 'stats' ? state.to : null
   const student = state.tab === 'pages' && state.sub === 'stats' ? state.student : ''
-  const [rows, setRows] = useState<SheetRowValues[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const pagesQuery = useQuery({ ...pagesQueryOptions, enabled: ready })
+  const rows = pagesQuery.data ?? null
+  const loadError = pagesQuery.error ? pagesQuery.error instanceof SheetsAccessError ? pagesQuery.error.message : t('statsLoadError') : null
+  const isLoading = pagesQuery.isLoading
   const [showAll, setShowAll] = useState(false)
   const [selectedBucket, setSelectedBucket] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!ready) return
-    let cancelled = false
-    setIsLoading(true)
-    fetchExistingRows()
-      .then((raw) => {
-        if (cancelled) return
-        setRows(parseSheetRows(raw))
-        setLoadError(null)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setLoadError(
-          err instanceof SheetsAccessError ? err.message : t('statsLoadError'),
-        )
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [ready, t])
 
   const studentOptions = useMemo(() => (rows ? uniqueStudentNames(rows.filter((row) => visibleStudent(row.student))) : []), [rows, visibleStudent])
 

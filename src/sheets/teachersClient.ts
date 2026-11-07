@@ -1,3 +1,5 @@
+import { queryOptions } from '@tanstack/react-query'
+import { queryClient } from '../queryClient'
 import { config } from '../config'
 import { withTokenRetry } from '../auth/token'
 import { SheetsAccessError } from './sheetsClient'
@@ -7,7 +9,6 @@ export interface Teacher {
   email: string
 }
 
-let teachersPromise: Promise<Teacher[]> | null = null
 
 function quoteSheetTitle(title: string): string {
   return `'${title.replace(/'/g, "''")}'`
@@ -41,15 +42,15 @@ async function loadTeachers(): Promise<Teacher[]> {
   }
 }
 
-// Cached for the session: the teacher list rarely changes mid-session and is fetched on first use.
+export const teachersQueryOptions = queryOptions({
+  queryKey: ['teachers', config.teachersSheetId, config.teachersSheetName, config.teachersNameColumn, config.teachersEmailColumn],
+  staleTime: 15 * 60_000,
+  gcTime: 30 * 60_000,
+  queryFn: loadTeachers,
+})
+
 export function fetchTeachers(): Promise<Teacher[]> {
-  if (!teachersPromise) {
-    teachersPromise = loadTeachers().catch((err) => {
-      teachersPromise = null
-      throw err
-    })
-  }
-  return teachersPromise
+  return queryClient.fetchQuery(teachersQueryOptions)
 }
 
 export function findTeacherByEmail(teachers: Teacher[], email: string): Teacher | undefined {

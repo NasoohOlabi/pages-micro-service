@@ -1,12 +1,12 @@
-import { useStudentFilter, useRefreshRoster } from '../students/StudentFilterContext'
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useStudentFilter } from '../students/StudentFilterContext'
+import { Fragment, useMemo, useState } from 'react'
 import {
   appendRosterStudent,
-  fetchRosterSheet,
-  type RosterSheet,
+  rosterQueryOptions,
 } from '../sheets/rosterClient'
 import {
-  fetchAttendanceSheet,
+  attendanceQueryOptions,
   getStudentAttendanceHistory,
   type AttendanceHistoryEntry,
 } from '../sheets/attendanceClient'
@@ -57,46 +57,23 @@ function rosterColumnLabel(
 
 export function RosterView({ ready }: RosterViewProps) {
   const visibleStudent = useStudentFilter()
-  const refreshRoster = useRefreshRoster()
   const { locale, t } = useLocale()
   const [state, setQuery] = useQueryState()
   const mode = state.tab === 'students' && state.sub === 'add' ? 'add' : 'list'
   const query = state.tab === 'students' ? state.q : ''
-  const [sheet, setSheet] = useState<RosterSheet | null>(null)
+  const rosterQuery = useQuery({ ...rosterQueryOptions, enabled: ready })
+  const sheet = rosterQuery.data ?? null
+  const isLoading = rosterQuery.isLoading
+  const loadError = rosterQuery.error ? rosterQuery.error instanceof SheetsAccessError ? rosterQuery.error.message : t('rosterLoadError') : null
   const [formValues, setFormValues] = useState<Record<number, string>>({})
-  const [loadError, setLoadError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null)
-  const [historyByStudent, setHistoryByStudent] = useState<
-    Record<string, AttendanceHistoryEntry[] | 'loading' | 'error'>
-  >({})
-
-  useEffect(() => {
-    if (!ready) return
-    let cancelled = false
-    setIsLoading(true)
-    fetchRosterSheet()
-      .then((result) => {
-        if (cancelled) return
-        setSheet(result)
-        setLoadError(null)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setLoadError(
-          err instanceof SheetsAccessError ? err.message : t('rosterLoadError'),
-        )
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [ready, t])
+  const attendanceQuery = useQuery({ ...attendanceQueryOptions, enabled: ready && expandedStudent !== null })
+  const historyByStudent: Record<string, AttendanceHistoryEntry[] | 'loading' | 'error'> = expandedStudent ? {
+    [expandedStudent]: attendanceQuery.data ? getStudentAttendanceHistory(attendanceQuery.data, expandedStudent) : attendanceQuery.error ? 'error' : 'loading',
+  } : {}
 
   const rows = useMemo(() => {
     if (!sheet) return []
@@ -138,22 +115,8 @@ export function RosterView({ ready }: RosterViewProps) {
     setSuccessMessage(null)
   }
 
-  const toggleHistory = async (student: string) => {
-    if (expandedStudent === student) {
-      setExpandedStudent(null)
-      return
-    }
-    setExpandedStudent(student)
-    if (historyByStudent[student] !== undefined) return
-
-    setHistoryByStudent((current) => ({ ...current, [student]: 'loading' }))
-    try {
-      const attendanceSheet = await fetchAttendanceSheet()
-      const history = getStudentAttendanceHistory(attendanceSheet, student)
-      setHistoryByStudent((current) => ({ ...current, [student]: history }))
-    } catch {
-      setHistoryByStudent((current) => ({ ...current, [student]: 'error' }))
-    }
+  const toggleHistory = (student: string) => {
+    setExpandedStudent((current) => current === student ? null : student)
   }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -183,9 +146,6 @@ export function RosterView({ ready }: RosterViewProps) {
         formValues[index]?.trim() ?? '',
       )
       await appendRosterStudent(values)
-      const nextSheet = await fetchRosterSheet()
-      setSheet(nextSheet)
-      refreshRoster(nextSheet)
       setFormValues({})
       setSuccessMessage(t('studentCreated', { student: studentName }))
       setQuery({ sub: 'list' }, 'push')

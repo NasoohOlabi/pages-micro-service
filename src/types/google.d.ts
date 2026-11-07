@@ -54,6 +54,10 @@ interface GapiClient {
         fields: string
       }): Promise<{ result: { sheets?: { properties: { sheetId: number; title: string } }[] } }>
       values: {
+        batchGet(params: {
+          spreadsheetId: string
+          ranges: string[]
+        }): Promise<{ result: { valueRanges?: { values?: string[][] }[] } }>
         get(params: {
           spreadsheetId: string
           range: string

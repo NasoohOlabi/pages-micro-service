@@ -1,33 +1,23 @@
-import { useStudentFilter, useRefreshRoster } from '../students/StudentFilterContext'
-import { useEffect, useState } from 'react'
+import { useQuery, useMutation } from '@tanstack/react-query'
+import { useStudentFilter } from '../students/StudentFilterContext'
+import { useState } from 'react'
 import { useLocale } from '../i18n/LocaleContext'
-import { fetchGroupStudents, fetchRosterSheet, updateStudentActive, updateStudentGroup, type GroupStudent } from '../sheets/rosterClient'
+import { rosterQueryOptions, rosterGroups, updateStudentActive, updateStudentGroup, type GroupStudent } from '../sheets/rosterClient'
 import { SheetsAccessError } from '../sheets/sheetsClient'
 import { useQueryState } from '../url/queryState'
 
 export function GroupView({ ready }: { ready: boolean }) {
   const visibleStudent = useStudentFilter()
-  const refreshRoster = useRefreshRoster()
   const { t } = useLocale()
   const [state, setQuery] = useQueryState()
   const group = state.tab === 'groups' ? state.group : ''
-  const [students, setStudents] = useState<GroupStudent[] | null>(null)
+  const { data: students = null, error: loadError, refetch } = useQuery({ ...rosterQueryOptions, enabled: ready, select: rosterGroups })
+  const mutation = useMutation({ mutationFn: (action: { kind: 'active'; student: GroupStudent } | { kind: 'group'; student: GroupStudent; group: string }) => action.kind === 'active' ? updateStudentActive(action.student) : updateStudentGroup(action.student, action.group) })
+  const saving = mutation.isPending
   const [selected, setSelected] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [saving, setSaving] = useState(false)
   const [move, setMove] = useState<{ rowNumber: number; destination: string } | null>(null)
-
-  useEffect(() => {
-    if (!ready) return
-    let cancelled = false
-    fetchGroupStudents().then((rows) => {
-      if (!cancelled) setStudents(rows)
-    }).catch((err) => {
-      if (!cancelled) setError(err instanceof SheetsAccessError ? err.message : t('rosterLoadError'))
-    })
-    return () => { cancelled = true }
-  }, [ready, t])
 
   const groups = [...new Set((students ?? []).filter((student) => visibleStudent(student.name)).map((student) => student.group).filter(Boolean))].sort((a, b) => a.localeCompare(b))
   if (group && !groups.includes(group)) groups.push(group)
@@ -36,36 +26,27 @@ export function GroupView({ ready }: { ready: boolean }) {
   const destinations = [...new Set((students ?? []).map((student) => student.group).filter((name) => name && name !== group))].sort((a, b) => a.localeCompare(b))
 
   async function changeGroup(student: GroupStudent, nextGroup: string) {
-    setSaving(true)
     setError('')
     setSuccess('')
     try {
-      await updateStudentGroup(student, nextGroup)
-      setStudents(await fetchGroupStudents())
+      await mutation.mutateAsync({ kind: 'group', student, group: nextGroup })
       setSelected('')
       setMove(null)
     } catch (err) {
       setError(err instanceof SheetsAccessError ? err.message : t('groupSaveError'))
-    } finally {
-      setSaving(false)
     }
   }
 
   async function toggleActive(student: GroupStudent) {
-    setSaving(true)
     setError('')
     setSuccess('')
     try {
-      await updateStudentActive(student)
-      setStudents(await fetchGroupStudents())
-      refreshRoster(await fetchRosterSheet())
+      await mutation.mutateAsync({ kind: 'active', student })
       setMove(null)
       setSelected('')
       setSuccess(t('activationSaved', { student: student.name }))
     } catch (err) {
       setError(err instanceof SheetsAccessError ? err.message : t('activationSaveError'))
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -76,9 +57,11 @@ export function GroupView({ ready }: { ready: boolean }) {
         <option value="">{t('groupSelect')}</option>
         {groups.map((name) => <option key={name} value={name}>{name}</option>)}
       </select>
+      {loadError && <p role="alert" className="text-sm text-red-600">{loadError instanceof SheetsAccessError ? loadError.message : t('rosterLoadError')}</p>}
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {success && <p role="status" className="text-sm text-green-700">{success}</p>}
-      {!students && !error && <p className="text-sm text-gray-500">{t('rosterLoading')}</p>}
+      {(loadError || error) && <button type="button" disabled={saving} onClick={() => void refetch()} className="self-start rounded border border-gray-300 px-3 py-2 text-sm disabled:opacity-50">{t('retryLoad')}</button>}
+      {!students && !error && !loadError && <p className="text-sm text-gray-500">{t('rosterLoading')}</p>}
       {students && groups.length === 0 && <p className="text-sm text-gray-500">{t('groupNoGroups')}</p>}
       {group && students && <>
         {members.length === 0 ? <p className="text-sm text-gray-500">{t('attendanceNoStudents')}</p> :

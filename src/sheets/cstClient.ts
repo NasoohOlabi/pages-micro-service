@@ -1,12 +1,14 @@
+import { cacheSession } from '../queryClient'
 import { config } from '../config'
 import { cstRowToValues, type CstRowValues } from './cstSchema'
-import { fetchSheetDataRows, withSheetsAccessErrorHandling } from './sheetsClient'
+import { fetchSheetDataRows, invalidateSheetRows, withSheetsAccessErrorHandling } from './sheetsClient'
 
 export async function fetchExistingCstRows(): Promise<string[][]> {
   return fetchSheetDataRows(config.cstSheetRange)
 }
 
 export async function appendCstRow(row: CstRowValues): Promise<void> {
+  const session = cacheSession
   await withSheetsAccessErrorHandling(() =>
     window.gapi.client.sheets.spreadsheets.values.append({
       spreadsheetId: config.sheetId,
@@ -15,4 +17,5 @@ export async function appendCstRow(row: CstRowValues): Promise<void> {
       resource: { values: [cstRowToValues(row)] },
     }),
   )
+  await invalidateSheetRows(config.cstSheetRange, session)
 }

@@ -39,7 +39,7 @@ function App() {
           {!accessToken ? (
             <SignInButton onClick={signIn} disabled={!ready} />
           ) : (
-            <StudentFilter ready={ready}>
+            <StudentFilter key={user.email} ready={ready}>
               <div className="flex w-full flex-col items-start gap-4 lg:flex-row lg:gap-6 print:block">
                 <Sidebar />
                 <main className="flex min-w-0 w-full flex-1 justify-center print:block" aria-label={t(TAB_LABELS[activeTab])}>
