@@ -188,9 +188,7 @@ function indexToColumnLetter(index: number): string {
   return result
 }
 
-export interface GroupStudent {
-  rowNumber: number
-  name: string
+export interface GroupStudent extends ActivationStudent {
   group: string
 }
 
@@ -210,6 +208,7 @@ export async function fetchGroupStudents(): Promise<GroupStudent[]> {
       rowNumber: index + 2,
       name: String(row[nameIndex] ?? '').trim(),
       group: String(row[groupIndex] ?? '').trim(),
+      active: isActiveStudent(String(row[5] ?? '')),
     })).filter((row) => row.name)
   } catch (err) {
     handleRosterAccessError(err)

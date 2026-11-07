@@ -1,18 +1,20 @@
-import { useStudentFilter } from '../students/StudentFilterContext'
+import { useStudentFilter, useRefreshRoster } from '../students/StudentFilterContext'
 import { useEffect, useState } from 'react'
 import { useLocale } from '../i18n/LocaleContext'
-import { fetchGroupStudents, updateStudentGroup, type GroupStudent } from '../sheets/rosterClient'
+import { fetchGroupStudents, fetchRosterSheet, updateStudentActive, updateStudentGroup, type GroupStudent } from '../sheets/rosterClient'
 import { SheetsAccessError } from '../sheets/sheetsClient'
 import { useQueryState } from '../url/queryState'
 
 export function GroupView({ ready }: { ready: boolean }) {
   const visibleStudent = useStudentFilter()
+  const refreshRoster = useRefreshRoster()
   const { t } = useLocale()
   const [state, setQuery] = useQueryState()
   const group = state.tab === 'groups' ? state.group : ''
   const [students, setStudents] = useState<GroupStudent[] | null>(null)
   const [selected, setSelected] = useState('')
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [saving, setSaving] = useState(false)
   const [move, setMove] = useState<{ rowNumber: number; destination: string } | null>(null)
 
@@ -36,6 +38,7 @@ export function GroupView({ ready }: { ready: boolean }) {
   async function changeGroup(student: GroupStudent, nextGroup: string) {
     setSaving(true)
     setError('')
+    setSuccess('')
     try {
       await updateStudentGroup(student, nextGroup)
       setStudents(await fetchGroupStudents())
@@ -43,6 +46,24 @@ export function GroupView({ ready }: { ready: boolean }) {
       setMove(null)
     } catch (err) {
       setError(err instanceof SheetsAccessError ? err.message : t('groupSaveError'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function toggleActive(student: GroupStudent) {
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      await updateStudentActive(student)
+      setStudents(await fetchGroupStudents())
+      refreshRoster(await fetchRosterSheet())
+      setMove(null)
+      setSelected('')
+      setSuccess(t('activationSaved', { student: student.name }))
+    } catch (err) {
+      setError(err instanceof SheetsAccessError ? err.message : t('activationSaveError'))
     } finally {
       setSaving(false)
     }
@@ -56,6 +77,7 @@ export function GroupView({ ready }: { ready: boolean }) {
         {groups.map((name) => <option key={name} value={name}>{name}</option>)}
       </select>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      {success && <p role="status" className="text-sm text-green-700">{success}</p>}
       {!students && !error && <p className="text-sm text-gray-500">{t('rosterLoading')}</p>}
       {students && groups.length === 0 && <p className="text-sm text-gray-500">{t('groupNoGroups')}</p>}
       {group && students && <>
@@ -65,6 +87,9 @@ export function GroupView({ ready }: { ready: boolean }) {
               <div className="flex items-center justify-between gap-3">
                 <span className="min-w-0 break-words">{student.name}</span>
                 <div className="flex shrink-0 gap-1">
+                  <button type="button" aria-label={t(student.active ? 'deactivateStudent' : 'activateStudent', { student: student.name })} title={t(student.active ? 'deactivateStudent' : 'activateStudent', { student: student.name })} disabled={saving} onClick={() => void toggleActive(student)} className={`flex size-11 items-center justify-center rounded-md focus-visible:outline-2 focus-visible:outline-indigo-600 disabled:opacity-40 ${student.active ? 'text-amber-700 hover:bg-amber-50' : 'text-green-700 hover:bg-green-50'}`}>
+                    <svg aria-hidden="true" className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 3v9m-6.36-7.36a9 9 0 1 0 12.72 0" /></svg>
+                  </button>
                   <button type="button" aria-label={t('moveStudent', { student: student.name })} title={t('moveStudent', { student: student.name })} aria-expanded={move?.rowNumber === student.rowNumber} aria-controls={`move-student-${student.rowNumber}`} disabled={saving || destinations.length === 0} onClick={() => setMove(move?.rowNumber === student.rowNumber ? null : { rowNumber: student.rowNumber, destination: '' })} className="flex size-11 items-center justify-center rounded-md text-indigo-700 hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-indigo-600 disabled:opacity-40">
                     <svg aria-hidden="true" className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4" /></svg>
                   </button>
