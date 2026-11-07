@@ -4,6 +4,7 @@ import { PagesTab } from './form/PagesTab'
 import { PointsForm } from './form/PointsForm'
 import { CstForm } from './form/CstForm'
 import { AttendanceForm } from './form/AttendanceForm'
+import { GroupView } from './form/GroupView'
 import { RosterView } from './form/RosterView'
 import { FinalsView } from './stats/FinalsView'
 import { MemorizationView } from './stats/MemorizationView'
@@ -22,6 +23,7 @@ const TAB_LABELS = {
   attendance: 'attendanceTab',
   students: 'studentsTab',
   finals: 'finalsTab',
+  groups: 'groupsTab',
 } as const satisfies Record<AppTab, TranslationKey>
 
 function App() {
@@ -51,7 +53,7 @@ function App() {
             <SignInButton onClick={signIn} disabled={!ready} />
           ) : (
             <>
-              <div className="grid w-full max-w-4xl grid-cols-3 gap-1 rounded-md border border-gray-200 bg-white p-1 sm:grid-cols-7 print:hidden">
+              <div className="grid w-full max-w-4xl grid-cols-3 gap-1 rounded-md border border-gray-200 bg-white p-1 sm:grid-cols-8 print:hidden">
                 {APP_TABS.map((tab) => (
                   <button
                     key={tab}
@@ -78,6 +80,8 @@ function App() {
                 <CstForm ready={ready} />
               ) : activeTab === 'students' ? (
                 <RosterView ready={ready} />
+              ) : activeTab === 'groups' ? (
+                <GroupView ready={ready} />
               ) : activeTab === 'finals' ? (
                 <FinalsView ready={ready} />
               ) : (

@@ -127,3 +127,49 @@ export function fetchRosterSheet(): Promise<RosterSheet> {
   }
   return rosterSheetPromise
 }
+
+export interface GroupStudent {
+  rowNumber: number
+  name: string
+  group: string
+}
+
+export async function fetchGroupStudents(): Promise<GroupStudent[]> {
+  try {
+    const title = await resolveTabTitle()
+    const response = await withTokenRetry(() =>
+      window.gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: config.rosterSheetId,
+        range: `${quoteSheetTitle(title)}!A:ZZ`,
+      }),
+    )
+    const nameIndex = columnLetterToIndex(config.rosterNameColumn)
+    return (response.result.values ?? []).slice(1).map((row, index) => ({
+      rowNumber: index + 2,
+      name: String(row[nameIndex] ?? '').trim(),
+      group: String(row[7] ?? '').trim(),
+    })).filter((row) => row.name)
+  } catch (err) {
+    handleRosterAccessError(err)
+  }
+}
+
+export async function updateStudentGroup(student: GroupStudent, group: string): Promise<void> {
+  try {
+    const current = await fetchGroupStudents()
+    const row = current.find((item) => item.rowNumber === student.rowNumber)
+    if (!row || row.name !== student.name || row.group !== student.group) throw new Error('Roster changed')
+    const title = await resolveTabTitle()
+    await withTokenRetry(() =>
+      window.gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: config.rosterSheetId,
+        range: `${quoteSheetTitle(title)}!H${student.rowNumber}`,
+        valueInputOption: 'RAW',
+        resource: { values: [[group]] },
+      }),
+    )
+    rosterSheetPromise = null
+  } catch (err) {
+    handleRosterAccessError(err)
+  }
+}

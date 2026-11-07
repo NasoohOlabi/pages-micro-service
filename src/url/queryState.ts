@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-export const APP_TABS = ['pages', 'memorization', 'points', 'cst', 'attendance', 'students', 'finals'] as const
+export const APP_TABS = ['pages', 'memorization', 'points', 'cst', 'attendance', 'students', 'groups', 'finals'] as const
 export type AppTab = (typeof APP_TABS)[number]
 
 export type StatsView = 'students' | 'time' | 'teachers' | 'coverage'
@@ -11,12 +11,13 @@ export type QueryState =
   | { tab: 'pages'; sub: 'log' }
   | { tab: 'pages'; sub: 'stats'; view: StatsView; from: string | null; to: string | null; student: string }
   | { tab: 'points' }
-  | { tab: 'memorization'; q: string }
+  | { tab: 'memorization'; q: string; group: string }
   | { tab: 'cst' }
   | { tab: 'attendance'; sub: 'student'; date: string }
   | { tab: 'attendance'; sub: 'group'; date: string; group: string }
   | { tab: 'students'; sub: 'list'; q: string }
   | { tab: 'students'; sub: 'add'; q: string }
+  | { tab: 'groups'; group: string }
   | { tab: 'finals'; factor: string; cst: string; sort: FinalsSort }
 
 export type QueryPatch = {
@@ -79,13 +80,15 @@ function defaultsFor(tab: AppTab): QueryState {
     case 'points':
       return { tab: 'points' }
     case 'memorization':
-      return { tab: 'memorization', q: '' }
+      return { tab: 'memorization', q: '', group: '' }
     case 'cst':
       return { tab: 'cst' }
     case 'attendance':
       return { tab: 'attendance', sub: 'student', date: localIsoDate() }
     case 'students':
       return { tab: 'students', sub: 'list', q: '' }
+    case 'groups':
+      return { tab: 'groups', group: '' }
     case 'finals':
       return { tab: 'finals', factor: '10', cst: '300', sort: 'score' }
     default: {
@@ -114,7 +117,7 @@ export function parseQueryState(search: string): QueryState {
 
   if (tab === 'points') return { tab: 'points' }
 
-  if (tab === 'memorization') return { tab: 'memorization', q: params.get('q') ?? '' }
+  if (tab === 'memorization') return { tab: 'memorization', q: params.get('q') ?? '', group: params.get('group') ?? '' }
 
   if (tab === 'cst') return { tab: 'cst' }
 
@@ -129,6 +132,8 @@ export function parseQueryState(search: string): QueryState {
     if (sub === 'add') return { tab: 'students', sub: 'add', q }
     return { tab: 'students', sub: 'list', q }
   }
+
+  if (tab === 'groups') return { tab: 'groups', group: params.get('group') ?? '' }
 
   if (tab === 'finals') {
     const factor = params.get('factor')
@@ -180,6 +185,7 @@ export function hrefFor(state: QueryState): string {
       break
     case 'memorization':
       if (state.q) params.set('q', state.q)
+      if (state.group) params.set('group', state.group)
       break
     case 'cst':
       break
@@ -193,6 +199,9 @@ export function hrefFor(state: QueryState): string {
     case 'students':
       if (state.sub === 'add') params.set('sub', 'add')
       if (state.q) params.set('q', state.q)
+      break
+    case 'groups':
+      if (state.group) params.set('group', state.group)
       break
     case 'finals':
       if (state.factor !== '10') params.set('factor', state.factor)
@@ -257,9 +266,13 @@ function withFields(state: QueryState, patch: QueryPatch): QueryState {
     return { tab: 'attendance', sub: 'student', date }
   }
 
-  if (state.tab === 'students' || state.tab === 'memorization') {
+  if (state.tab === 'memorization') return { ...state, q: patch.q ?? state.q, group: patch.group ?? state.group }
+
+  if (state.tab === 'students') {
     return { ...state, q: patch.q ?? state.q }
   }
+
+  if (state.tab === 'groups') return { ...state, group: patch.group ?? state.group }
 
   if (state.tab === 'finals') {
     return {

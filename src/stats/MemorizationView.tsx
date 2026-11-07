@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
 import { useLocale } from '../i18n/LocaleContext'
+import { fetchGroupStudents, type GroupStudent } from '../sheets/rosterClient'
 import { fetchExistingRows, SheetsAccessError } from '../sheets/sheetsClient'
 import { parseSheetRows, type SheetRowValues } from '../sheets/schema'
 import { useQueryState } from '../url/queryState'
@@ -11,12 +12,20 @@ export function MemorizationView({ ready }: { ready: boolean }) {
   const { t } = useLocale()
   const [state, setQuery] = useQueryState()
   const query = state.tab === 'memorization' ? state.q : ''
+  const group = state.tab === 'memorization' ? state.group : ''
+  const [roster, setRoster] = useState<GroupStudent[] | null>(null)
+  const [rosterError, setRosterError] = useState<string | null>(null)
   const [rows, setRows] = useState<SheetRowValues[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!ready) return
     let cancelled = false
+    fetchGroupStudents().then((students) => {
+      if (!cancelled) { setRoster(students); setRosterError(null) }
+    }).catch((err: unknown) => {
+      if (!cancelled) setRosterError(err instanceof SheetsAccessError ? err.message : t('rosterLoadError'))
+    })
     fetchExistingRows({ includeArchived: true })
       .then((raw) => {
         if (!cancelled) setRows(parseSheetRows(raw))
@@ -28,19 +37,25 @@ export function MemorizationView({ ready }: { ready: boolean }) {
   }, [ready, t])
 
   const history = useMemo(() => buildMemorizationHistory(rows ?? []), [rows])
-  const fuse = useMemo(() => new Fuse(history, {
+  const groups = useMemo(() => [...new Set((roster ?? []).map((student) => student.group).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [roster])
+  const filteredHistory = useMemo(() => {
+    if (!group) return history
+    const names = new Set((roster ?? []).filter((student) => student.group === group).map((student) => student.name.toLowerCase()))
+    return history.filter((student) => names.has(student.student.trim().toLowerCase()))
+  }, [group, history, roster])
+  const fuse = useMemo(() => new Fuse(filteredHistory, {
     keys: ['student'], threshold: 0.4, ignoreLocation: true,
-  }), [history])
+  }), [filteredHistory])
   const matches = useMemo(() => {
     const search = query.trim()
-    if (!search) return history
+    if (!search) return filteredHistory
     const keys = new Set([search, englishKeysToArabic(search)])
     const results = new Map<string, (typeof history)[number]>()
     for (const key of keys) {
       for (const { item } of fuse.search(key)) results.set(item.student, item)
     }
     return [...results.values()]
-  }, [fuse, history, query])
+  }, [fuse, filteredHistory, query])
 
   return (
     <section className="w-full max-w-4xl space-y-4" aria-label={t('memorizationTab')}>
@@ -57,8 +72,18 @@ export function MemorizationView({ ready }: { ready: boolean }) {
           className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-base focus:border-indigo-500 focus:outline-none"
         />
       </div>
+      <div>
+        <label htmlFor="memorization-group" className="mb-1 block text-sm font-medium text-gray-700">{t('rosterGroup')}</label>
+        <select id="memorization-group" value={group} onChange={(event) => setQuery({ group: event.target.value }, 'replace')} disabled={!roster} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2">
+          <option value="">{t('memorizationAllGroups')}</option>
+          {group && !groups.includes(group) && <option value={group}>{group}</option>}
+          {groups.map((name) => <option key={name} value={name}>{name}</option>)}
+        </select>
+        {rosterError && <p role="alert" className="mt-1 text-sm text-red-600">{rosterError}</p>}
+      </div>
       {error ? <p role="alert" className="text-sm text-red-600">{error}</p>
-        : rows === null ? <p role="status" className="text-sm text-gray-500">{t('memorizationLoading')}</p>
+        : rows === null || (group && !roster && !rosterError) ? <p role="status" className="text-sm text-gray-500">{t('memorizationLoading')}</p>
+          : group && !roster ? null
           : matches.length === 0 ? <p className="text-sm text-gray-500">{t('rosterNoMatches')}</p>
             : matches.map((student) => (
               <details key={student.student} className="rounded-lg border border-gray-200 bg-white">
