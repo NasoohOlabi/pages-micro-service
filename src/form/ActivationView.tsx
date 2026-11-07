@@ -59,7 +59,13 @@ export function ActivationView({ ready }: { ready: boolean }) {
         <ul className="divide-y divide-gray-200">{matches.map((student) => (
           <li key={student.rowNumber} className="flex items-center justify-between gap-3 py-3">
             <div><p className="font-medium text-gray-900">{student.name}</p><p className={`text-sm ${student.active ? 'text-green-700' : 'text-gray-500'}`}>{student.active ? t('studentActive') : t('studentInactive')}</p></div>
-            <button type="button" aria-label={t(student.active ? 'deactivateStudent' : 'activateStudent', { student: student.name })} disabled={saving !== null} onClick={() => void toggle(student)} className="min-h-11 rounded-md border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700 disabled:opacity-50">{saving === student.rowNumber ? t('saving') : t(student.active ? 'deactivate' : 'activate')}</button>
+            <button type="button" role="switch" aria-checked={student.active} aria-label={`${t('studentActive')}: ${student.name}`} aria-busy={saving === student.rowNumber} disabled={saving !== null} onClick={() => void toggle(student)} className="flex min-h-11 w-14 shrink-0 items-center justify-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50">
+              <span aria-hidden="true" dir="ltr" className={`flex h-6 w-11 items-center rounded-full p-0.5 transition-colors ${student.active ? 'bg-indigo-600' : 'bg-gray-300'}`}>
+                <span className={`flex size-5 items-center justify-center rounded-full bg-white shadow-sm motion-safe:transition-transform ${student.active ? 'translate-x-5' : ''}`}>
+                  {saving === student.rowNumber && <span className="size-3 rounded-full border-2 border-indigo-200 border-t-indigo-600 motion-safe:animate-spin" />}
+                </span>
+              </span>
+            </button>
           </li>
         ))}</ul>
       )}
