@@ -51,3 +51,10 @@ test('new Arabic toggle labels contain Arabic text without encoding replacements
     expect(translations.ar[key]).not.toContain('?')
   }
 })
+
+test('all Arabic labels are free of question-mark corruption', () => {
+  for (const [key, value] of Object.entries(translations.ar)) {
+    expect(value, key).not.toMatch(/\?{2,}|\uFFFD/)
+  }
+  expect(translations.ar.groupSelect).toBe('\u0627\u062e\u062a\u0631 \u062d\u0644\u0642\u0629')
+})
