@@ -27,7 +27,7 @@ export function StudentFilter({ children, ready }: { children: ReactNode; ready:
   const visible = useMemo(() => studentVisibility(roster?.rows ?? [], roster?.nameColumnIndex ?? 0, allStudents), [roster, allStudents])
   return (
     <StudentFilterContext.Provider value={{ visible, refresh: setRoster }}>
-      <button type="button" role="switch" aria-label={t('activeStudentsOnly')} aria-checked={!allStudents} onClick={() => setQuery({ allStudents: !allStudents }, 'replace')} className="fixed top-12 right-2 z-20 flex min-h-10 items-center gap-2 rounded-md border border-indigo-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-indigo-800 shadow-sm sm:top-2 sm:right-16 print:hidden">
+      <button type="button" role="switch" aria-label={t('activeStudentsOnly')} aria-checked={!allStudents} onClick={() => setQuery({ allStudents: !allStudents }, 'replace')} className="fixed top-2 right-14 z-20 flex min-h-10 max-w-[calc(100vw-9rem)] items-center gap-2 rounded-md border border-indigo-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-indigo-800 shadow-sm sm:right-16 print:hidden">
         <span className={`flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 ${allStudents ? 'bg-gray-300' : 'bg-indigo-600'}`} dir="ltr"><span className={`h-4 w-4 rounded-full bg-white transition-transform ${allStudents ? '' : 'translate-x-4'}`} /></span>
         {allStudents ? t('allStudents') : t('activeStudentsOnly')}
       </button>
