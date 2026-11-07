@@ -14,6 +14,7 @@ export function GroupView({ ready }: { ready: boolean }) {
   const [selected, setSelected] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [move, setMove] = useState<{ rowNumber: number; destination: string } | null>(null)
 
   useEffect(() => {
     if (!ready) return
@@ -30,6 +31,7 @@ export function GroupView({ ready }: { ready: boolean }) {
   if (group && !groups.includes(group)) groups.push(group)
   const members = (students ?? []).filter((student) => student.group === group && group && visibleStudent(student.name))
   const candidates = (students ?? []).filter((student) => student.group !== group && visibleStudent(student.name))
+  const destinations = [...new Set((students ?? []).map((student) => student.group).filter((name) => name && name !== group))].sort((a, b) => a.localeCompare(b))
 
   async function changeGroup(student: GroupStudent, nextGroup: string) {
     setSaving(true)
@@ -38,6 +40,7 @@ export function GroupView({ ready }: { ready: boolean }) {
       await updateStudentGroup(student, nextGroup)
       setStudents(await fetchGroupStudents())
       setSelected('')
+      setMove(null)
     } catch (err) {
       setError(err instanceof SheetsAccessError ? err.message : t('groupSaveError'))
     } finally {
@@ -48,7 +51,7 @@ export function GroupView({ ready }: { ready: boolean }) {
   return (
     <section className="flex w-full max-w-2xl flex-col gap-4 rounded-md border border-gray-200 bg-white p-4">
       <label htmlFor="group-select" className="text-sm font-medium text-gray-700">{t('rosterGroup')}</label>
-      <select id="group-select" value={group} onChange={(event) => { setQuery({ group: event.target.value }, 'replace'); setSelected('') }} className="rounded-md border border-gray-300 p-2">
+      <select id="group-select" value={group} disabled={saving} onChange={(event) => { setQuery({ group: event.target.value }, 'replace'); setSelected(''); setMove(null) }} className="rounded-md border border-gray-300 p-2">
         <option value="">{t('groupSelect')}</option>
         {groups.map((name) => <option key={name} value={name}>{name}</option>)}
       </select>
@@ -58,9 +61,27 @@ export function GroupView({ ready }: { ready: boolean }) {
       {group && students && <>
         {members.length === 0 ? <p className="text-sm text-gray-500">{t('attendanceNoStudents')}</p> :
           <ul className="divide-y divide-gray-200">{members.map((student) => (
-            <li key={student.rowNumber} className="flex items-center justify-between gap-3 py-2">
-              <span>{student.name}</span>
-              <button type="button" disabled={saving} onClick={() => void changeGroup(student, '')} className="rounded border border-gray-300 px-3 py-2 text-sm text-red-700 disabled:opacity-50">{t('removeStudent', { student: student.name })}</button>
+            <li key={student.rowNumber} className="py-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="min-w-0 break-words">{student.name}</span>
+                <div className="flex shrink-0 gap-1">
+                  <button type="button" aria-label={t('moveStudent', { student: student.name })} title={t('moveStudent', { student: student.name })} aria-expanded={move?.rowNumber === student.rowNumber} aria-controls={`move-student-${student.rowNumber}`} disabled={saving || destinations.length === 0} onClick={() => setMove(move?.rowNumber === student.rowNumber ? null : { rowNumber: student.rowNumber, destination: '' })} className="flex size-11 items-center justify-center rounded-md text-indigo-700 hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-indigo-600 disabled:opacity-40">
+                    <svg aria-hidden="true" className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4" /></svg>
+                  </button>
+                  <button type="button" aria-label={t('removeStudent', { student: student.name })} title={t('removeStudent', { student: student.name })} disabled={saving} onClick={() => void changeGroup(student, '')} className="flex size-11 items-center justify-center rounded-md text-red-600 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-600 disabled:opacity-40">
+                    <svg aria-hidden="true" className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6m4-6v6" /></svg>
+                  </button>
+                </div>
+              </div>
+              {move?.rowNumber === student.rowNumber && <form id={`move-student-${student.rowNumber}`} onSubmit={(event) => { event.preventDefault(); if (move.destination && !saving) void changeGroup(student, move.destination) }} className="mt-2 flex items-center gap-1 rounded-md bg-gray-50 p-2">
+                <label htmlFor={`destination-${student.rowNumber}`} className="sr-only">{t('moveToGroup')}</label>
+                <select autoFocus id={`destination-${student.rowNumber}`} required value={move.destination} disabled={saving} onChange={(event) => setMove({ rowNumber: student.rowNumber, destination: event.target.value })} className="min-w-0 flex-1 rounded-md border border-gray-300 bg-white p-2 text-sm">
+                  <option value="">{t('moveToGroup')}</option>
+                  {destinations.map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+                <button type="submit" aria-label={t('confirmMove')} title={t('confirmMove')} disabled={saving || !move.destination} className="flex size-11 shrink-0 items-center justify-center rounded-md text-indigo-700 hover:bg-indigo-100 disabled:opacity-40"><svg aria-hidden="true" className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 4 4L19 6" /></svg></button>
+                <button type="button" aria-label={t('cancelMove')} title={t('cancelMove')} disabled={saving} onClick={() => setMove(null)} className="flex size-11 shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-gray-200 disabled:opacity-40"><svg aria-hidden="true" className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m6 6 12 12M6 18 18 6" /></svg></button>
+              </form>}
             </li>
           ))}</ul>}
         <label htmlFor="group-student" className="text-sm font-medium text-gray-700">{t('groupAddSelect')}</label>

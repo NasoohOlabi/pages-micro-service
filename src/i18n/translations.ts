@@ -6,6 +6,10 @@ export const RTL_LOCALES: Locale[] = ['ar']
 
 export const translations = {
   en: {
+    moveStudent: 'Move {{student}} to another group',
+    moveToGroup: 'Choose destination group',
+    confirmMove: 'Confirm move',
+    cancelMove: 'Cancel move',
     navigation: 'Navigation',
     activationTab: 'Activation',
     activationDescription: 'Manage all students, including inactive students. Changes apply across the site.',
@@ -180,6 +184,10 @@ export const translations = {
     statsCoverageMost: 'Most',
   },
   ar: {
+    moveStudent: 'نقل {{student}} إلى حلقة أخرى',
+    moveToGroup: 'اختر الحلقة الجديدة',
+    confirmMove: 'تأكيد النقل',
+    cancelMove: 'إلغاء النقل',
     navigation: 'التنقل',
     activationTab: 'تفعيل الطلاب',
     activationDescription: 'إدارة جميع الطلاب، بما فيهم غير النشطين. تسري التغييرات على كامل الموقع.',
