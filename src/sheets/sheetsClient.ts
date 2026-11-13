@@ -47,7 +47,33 @@ export async function fetchExistingRows({ includeArchived = false, fresh = false
 }
 
 export async function invalidateSheetRows(range: string, session: number) {
-  if (session === cacheSession) await queryClient.invalidateQueries({ queryKey: sheetValuesQueryOptions(range).queryKey })
+  if (session === cacheSession) await queryClient.invalidateQueries({ queryKey: sheetValuesQueryOptions(range).queryKey, refetchType: 'none' })
+}
+
+export async function appendSheetValues(range: string, values: string[][]): Promise<void> {
+  const session = cacheSession
+  const { queryKey } = sheetValuesQueryOptions(range)
+  await queryClient.cancelQueries({ queryKey })
+  const snapshot = queryClient.getQueryData(queryKey)
+  const response = await withSheetsAccessErrorHandling(() => window.gapi.client.sheets.spreadsheets.values.append({
+    spreadsheetId: config.sheetId,
+    range,
+    valueInputOption: 'USER_ENTERED',
+    includeValuesInResponse: true,
+    responseValueRenderOption: 'FORMATTED_VALUE',
+    resource: { values },
+  }))
+  if (session !== cacheSession) return
+  const cached = queryClient.getQueryData(queryKey)
+  const appended = response?.result.updates?.updatedData?.values
+  const match = /!A(\d+):[A-Z]+(\d+)$/.exec(response?.result.updates?.updatedRange ?? '')
+  if (!cached || cached !== snapshot || queryClient.getQueryState(queryKey)?.isInvalidated || !appended || !match ||
+    Number(match[1]) !== cached.length + 1 || Number(match[2]) !== cached.length + appended.length || appended.length !== values.length) {
+    await invalidateSheetRows(range, session)
+    return
+  }
+  const updatedAt = queryClient.getQueryState(queryKey)?.dataUpdatedAt
+  queryClient.setQueryData(queryKey, [...cached, ...appended], { updatedAt })
 }
 
 function normalize(value: string | undefined): string {
@@ -65,14 +91,5 @@ export function findDuplicatePages(rows: string[][], values: SheetRowValues[]): 
 }
 
 export async function appendRows(rows: SheetRowValues[]): Promise<void> {
-  const session = cacheSession
-  await withSheetsAccessErrorHandling(() =>
-    window.gapi.client.sheets.spreadsheets.values.append({
-      spreadsheetId: config.sheetId,
-      range: config.sheetRange,
-      valueInputOption: 'USER_ENTERED',
-      resource: { values: rows.map(rowToValues) },
-    }),
-  )
-  await invalidateSheetRows(config.sheetRange, session)
+  await appendSheetValues(config.sheetRange, rows.map(rowToValues))
 }

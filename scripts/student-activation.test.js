@@ -1,6 +1,6 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 
-mock.module('../src/config', () => ({ config: { rosterSheetId: 'roster', rosterGid: '42', rosterNameColumn: 'A', sheetId: 'logs', sheetRange: 'Pages!A2:D', pointsSheetRange: 'Points!A2:E', cstSheetRange: 'CST!A2:D', attendanceSheetId: 'attendance', attendanceSheetName: 'AutoAttendance' } }))
+mock.module('../src/config', () => ({ config: { rosterSheetId: 'roster', rosterGid: '42', rosterNameColumn: 'A', sheetId: 'logs', sheetRange: 'Pages!A2:D', pointsSheetRange: 'Points!A2:E', cstSheetRange: 'CST!A2:D', attendanceSheetId: 'attendance', attendanceSheetName: 'AutoAttendance', teachersSheetId: 'teachers', teachersSheetName: 'Teachers', teachersNameColumn: 'A', teachersEmailColumn: 'B' } }))
 const { fetchActivationStudents, updateStudentActive, fetchRosterSheet, SheetsAccessError } = {
   ...await import('../src/sheets/rosterClient'),
   ...await import('../src/sheets/sheetsClient'),
@@ -133,13 +133,109 @@ test('failed status writes do not change cached state or retry the mutation', as
   expect(queryClient.getQueryState(rosterQueryOptions.queryKey).isInvalidated).toBe(true)
 })
 
-test('expired roster refreshes data while metadata stays cached', async () => {
+test('roster stays cached indefinitely until explicitly refreshed', async () => {
   const { calls, values } = rosterApi()
   const sheet = await fetchRosterSheet()
   values[1][5] = 'FALSE'
-  queryClient.setQueryData(rosterQueryOptions.queryKey, sheet, { updatedAt: Date.now() - 6 * 60_000 })
+  queryClient.setQueryData(rosterQueryOptions.queryKey, sheet, { updatedAt: Date.now() - 30 * 24 * 60 * 60_000 })
+  expect((await fetchActivationStudents())[0].active).toBe(true)
+  expect(calls.map((call) => call.kind)).toEqual(['metadata', 'read'])
+  await queryClient.invalidateQueries({ queryKey: rosterQueryOptions.queryKey, refetchType: 'none' })
   expect((await fetchActivationStudents())[0].active).toBe(false)
   expect(calls.map((call) => call.kind)).toEqual(['metadata', 'read', 'read'])
+})
+
+test('roster, teachers and confirmed edits survive reloads, while account changes remove stored data', async () => {
+  const { QueryClient } = await import('@tanstack/react-query')
+  const { restoreReferenceCache } = await import('../src/referenceCache')
+  const { fetchTeachers, teachersQueryOptions } = await import('../src/sheets/teachersClient')
+  const { calls, api } = rosterApi()
+  const stored = new Map()
+  window.localStorage = { getItem: (key) => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, value), removeItem: (key) => stored.delete(key) }
+  const get = api.values.get
+  api.values.get = async (request) => request.spreadsheetId === 'teachers'
+    ? (calls.push({ kind: 'teachers' }), { result: { values: [['Teacher', 'teacher@example.com']] } })
+    : get(request)
+  const reloaded = new QueryClient()
+  try {
+    setQueryUser('persistent@example.com')
+    const student = (await fetchActivationStudents())[1]
+    await fetchTeachers()
+    await updateStudentActive(student)
+    restoreReferenceCache(reloaded, 'persistent@example.com')
+    calls.length = 0
+    expect(rosterGroups(await reloaded.fetchQuery(rosterQueryOptions))[1].active).toBe(true)
+    expect((await reloaded.fetchQuery(teachersQueryOptions))[0].name).toBe('Teacher')
+    expect(calls).toEqual([])
+    expect(stored.size).toBe(1)
+    expect(JSON.parse([...stored.values()][0]).entries.map((entry) => entry.queryKey[0]).sort()).toEqual(['roster', 'roster-title', 'teachers'])
+    setQueryUser('another@example.com')
+    expect(queryClient.getQueryData(rosterQueryOptions.queryKey)).toBeUndefined()
+    expect(stored.size).toBe(0)
+    await fetchRosterSheet()
+    expect(stored.size).toBe(1)
+    setQueryUser(null)
+    expect(stored.size).toBe(0)
+  } finally {
+    setQueryUser(null)
+    reloaded.clear()
+  }
+})
+
+test('malformed, mismatched and inaccessible browser caches safely fall back to a fresh load', async () => {
+  const { QueryClient } = await import('@tanstack/react-query')
+  const { restoreReferenceCache, saveReferenceCache } = await import('../src/referenceCache')
+  const client = new QueryClient()
+  let removed = 0
+  for (const value of ['{broken', JSON.stringify({ email: 'other@example.com', entries: [] }), JSON.stringify({ email: 'same@example.com', entries: [{ queryKey: ['roster', 'id', '42', 'A'], data: { rows: 12 }, dataUpdatedAt: 1, isInvalidated: false }] })]) {
+    globalThis.window = { localStorage: { getItem: () => value, removeItem: () => removed++ } }
+    restoreReferenceCache(client, 'same@example.com')
+    expect(client.getQueryCache().getAll()).toHaveLength(0)
+  }
+  expect(removed).toBe(3)
+  globalThis.window = { localStorage: { getItem: () => { throw new Error('Blocked') }, setItem: () => { throw new Error('Full') }, removeItem: () => { throw new Error('Blocked') } } }
+  expect(() => restoreReferenceCache(client, 'same@example.com')).not.toThrow()
+  expect(() => saveReferenceCache(client, 'same@example.com')).not.toThrow()
+  client.clear()
+})
+
+test('deferred reference refresh remains invalidated after a reload', async () => {
+  const { QueryClient } = await import('@tanstack/react-query')
+  const { saveReferenceCache, restoreReferenceCache } = await import('../src/referenceCache')
+  const source = new QueryClient()
+  const reloaded = new QueryClient()
+  const stored = new Map()
+  globalThis.window = { localStorage: { getItem: (key) => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, value), removeItem: (key) => stored.delete(key) } }
+  const key = ['teachers', 'id', 'Teachers', 'A', 'B']
+  source.setQueryData(key, [{ name: 'Old', email: 'old@example.com' }])
+  await source.invalidateQueries({ queryKey: key, refetchType: 'none' })
+  saveReferenceCache(source, 'same@example.com')
+  restoreReferenceCache(reloaded, 'same@example.com')
+  let reads = 0
+  expect(await reloaded.fetchQuery({ queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return [{ name: 'New', email: 'new@example.com' }] } })).toEqual([{ name: 'New', email: 'new@example.com' }])
+  expect(reads).toBe(1)
+  source.clear()
+  reloaded.clear()
+})
+
+test('adding a student patches the permanent roster cache from the server response', async () => {
+  const { calls, api, values } = rosterApi()
+  const append = api.values.append
+  api.values.append = async (request) => {
+    await append(request)
+    return { result: { updates: { updatedRange: `'Info'!A${values.length}:I${values.length}`, updatedData: { values: request.resource.values } } } }
+  }
+  await fetchRosterSheet()
+  const observer = new QueryObserver(queryClient, rosterQueryOptions)
+  const unsubscribe = observer.subscribe(() => {})
+  try {
+    calls.length = 0
+    await appendRosterStudent(['New', '3', '', '', '', 'TRUE', '', '', 'A'])
+    expect((await fetchRosterNames()).at(-1)).toBe('New')
+    expect(calls.map((call) => call.kind)).toEqual(['append'])
+  } finally {
+    unsubscribe()
+  }
 })
 
 test('adding a student invalidates the roster and all projections see the new row', async () => {
@@ -173,6 +269,203 @@ const { fetchExistingRows, appendRows, sheetValuesQueryOptions } = await import(
 const { fetchAttendanceSheet, saveStudentAttendance, ATTENDANCE_STATUSES, getStudentAttendanceHistory } = await import('../src/sheets/attendanceClient')
 const { fetchExistingPointRows, appendPointRow } = await import('../src/sheets/pointsClient')
 const { memorizationQueryOptions, pagesQueryOptions } = await import('../src/sheets/logQueries')
+
+test('returning to a log after two minutes reuses the cached read', async () => {
+  let reads = 0
+  globalThis.window = { gapi: { client: { sheets: { spreadsheets: { values: {
+    get: async () => { reads++; return { result: { values: [['Student'], ['Alice']] } } },
+  } } } } } }
+  await fetchExistingRows()
+  const options = sheetValuesQueryOptions('Pages!A2:D')
+  queryClient.setQueryData(options.queryKey, queryClient.getQueryData(options.queryKey), { updatedAt: Date.now() - 2 * 60_000 })
+  await fetchExistingRows()
+  expect(reads).toBe(1)
+  queryClient.setQueryData(options.queryKey, queryClient.getQueryData(options.queryKey), { updatedAt: Date.now() - 16 * 60_000 })
+  await fetchExistingRows()
+  expect(reads).toBe(2)
+})
+
+test('failed queries do not retry when another screen mounts, but explicit refresh retries', async () => {
+  const { refreshActiveQueries } = await import('../src/queryClient')
+  let reads = 0
+  const options = { queryKey: ['failure'], queryFn: async () => { reads++; throw new Error('Quota') } }
+  await expect(queryClient.fetchQuery(options)).rejects.toThrow('Quota')
+  const observer = new QueryObserver(queryClient, options)
+  const unsubscribe = observer.subscribe(() => {})
+  try {
+    await new Promise(setImmediate)
+    expect(reads).toBe(1)
+    await expect(refreshActiveQueries()).rejects.toThrow('Quota')
+    expect(reads).toBe(2)
+  } finally {
+    unsubscribe()
+  }
+})
+
+test('manual refresh reads active screens only and invalidates unused data for the next visit', async () => {
+  const { refreshActiveQueries } = await import('../src/queryClient')
+  const reads = []
+  globalThis.window = { gapi: { client: { sheets: { spreadsheets: { values: {
+    get: async ({ range }) => { reads.push(range.split('!')[0]); return { result: { values: [['Student']] } } },
+  } } } } } }
+  await Promise.all([fetchExistingRows(), fetchExistingPointRows()])
+  const observer = new QueryObserver(queryClient, sheetValuesQueryOptions('Pages!A2:D'))
+  const unusedObserver = new QueryObserver(queryClient, { ...sheetValuesQueryOptions('Points!A2:E'), enabled: false })
+  const unsubscribe = observer.subscribe(() => {})
+  const unsubscribeUnused = unusedObserver.subscribe(() => {})
+  try {
+    reads.length = 0
+    await refreshActiveQueries()
+    expect(reads).toEqual(['Pages'])
+    await fetchExistingPointRows()
+    expect(reads).toEqual(['Pages', 'Points'])
+  } finally {
+    unsubscribe()
+    unsubscribeUnused()
+  }
+})
+
+test('reconnecting does not refetch stale active data', async () => {
+  const { onlineManager } = await import('@tanstack/react-query')
+  let reads = 0
+  const options = { queryKey: ['reconnect'], queryFn: async () => ++reads }
+  await queryClient.fetchQuery(options)
+  const observer = new QueryObserver(queryClient, options)
+  const unsubscribe = observer.subscribe(() => {})
+  queryClient.setQueryData(options.queryKey, 1, { updatedAt: Date.now() - 16 * 60_000 })
+  queryClient.mount()
+  try {
+    onlineManager.setOnline(false)
+    onlineManager.setOnline(true)
+    await new Promise(setImmediate)
+    expect(reads).toBe(1)
+  } finally {
+    queryClient.unmount()
+    unsubscribe()
+  }
+})
+
+test('append responses update warm pages, points and CST caches without another read', async () => {
+  const { appendCstRow, fetchExistingCstRows } = await import('../src/sheets/cstClient')
+  const reads = []
+  const requests = []
+  globalThis.window = { gapi: { client: { sheets: { spreadsheets: { values: {
+    get: async ({ range }) => { reads.push(range); return { result: { values: [['Student']] } } },
+    append: async (request) => {
+      requests.push(request)
+      return { result: { updates: { updatedRange: `${request.range.split('!')[0]}!A2:E2`, updatedData: { values: request.resource.values } } } }
+    },
+  } } } } } }
+  await Promise.all([fetchExistingRows(), fetchExistingPointRows(), fetchExistingCstRows()])
+  const observer = new QueryObserver(queryClient, sheetValuesQueryOptions('Pages!A2:D'))
+  const unsubscribe = observer.subscribe(() => {})
+  try {
+    await appendRows([{ student: 'Alice', teacher: 'Teacher', page: 1, date: '2026-11-13' }])
+    await appendPointRow({ student: 'Alice', teacher: 'Teacher', points: 10, date: '2026-11-13', reason: 'Reason' })
+    await appendCstRow({ student: 'Alice', sabr: 'Test', mark: '10', date: '2026-11-13' })
+    expect((await fetchExistingRows())[0][0]).toBe('Alice')
+    expect((await fetchExistingPointRows())[0][2]).toBe('10')
+    expect((await fetchExistingCstRows())[0][0]).toBe('Alice')
+    expect(reads).toHaveLength(3)
+    expect(requests.every((request) => request.includeValuesInResponse && request.responseValueRenderOption === 'FORMATTED_VALUE')).toBe(true)
+  } finally {
+    unsubscribe()
+  }
+})
+
+test('append responses with external row gaps invalidate without an eager post-save read', async () => {
+  let reads = 0
+  globalThis.window = { gapi: { client: { sheets: { spreadsheets: { values: {
+    get: async () => { reads++; return { result: { values: [['Student']] } } },
+    append: async () => ({ result: { updates: { updatedRange: 'Pages!A4:D4', updatedData: { values: [['Alice', 'Teacher', '1', '2026-11-13']] } } } }),
+  } } } } } }
+  await fetchExistingRows()
+  const options = sheetValuesQueryOptions('Pages!A2:D')
+  const observer = new QueryObserver(queryClient, options)
+  const unsubscribe = observer.subscribe(() => {})
+  try {
+    await appendRows([{ student: 'Alice', teacher: 'Teacher', page: 1, date: '2026-11-13' }])
+    expect(queryClient.getQueryState(options.queryKey).isInvalidated).toBe(true)
+    expect(reads).toBe(1)
+  } finally {
+    unsubscribe()
+  }
+})
+
+test('out-of-order appends keep the cache invalidated instead of losing a saved row', async () => {
+  const pending = []
+  globalThis.window = { gapi: { client: { sheets: { spreadsheets: { values: {
+    get: async () => ({ result: { values: [['Student']] } }),
+    append: () => new Promise((resolve) => pending.push(resolve)),
+  } } } } } }
+  await fetchExistingRows()
+  const first = appendRows([{ student: 'Alice', teacher: 'Teacher', page: 1, date: '2026-11-13' }])
+  const second = appendRows([{ student: 'Bob', teacher: 'Teacher', page: 2, date: '2026-11-13' }])
+  await new Promise(setImmediate)
+  pending[1]({ result: { updates: { updatedRange: 'Pages!A3:D3', updatedData: { values: [['Bob', 'Teacher', '2', '2026-11-13']] } } } })
+  await second
+  pending[0]({ result: { updates: { updatedRange: 'Pages!A2:D2', updatedData: { values: [['Alice', 'Teacher', '1', '2026-11-13']] } } } })
+  await first
+  expect(queryClient.getQueryState(sheetValuesQueryOptions('Pages!A2:D').queryKey).isInvalidated).toBe(true)
+})
+
+test('group attendance uses one batch write for every student and skips unchanged cells', async () => {
+  const { saveGroupAttendance } = await import('../src/sheets/attendanceClient')
+  const status = ATTENDANCE_STATUSES[0].value
+  const values = [Array.from({ length: 13 }, (_, i) => i === 12 ? 'Fri 13/11' : ''),
+    ...Array.from({ length: 20 }, (_, i) => [String(i), ...Array(11).fill(''), i === 0 ? status : ''])]
+  const calls = []
+  globalThis.window = { gapi: { client: { sheets: { spreadsheets: { values: {
+    get: async () => { calls.push('read'); return { result: { values: values.map((row) => [...row]) } } },
+    update: async () => { calls.push('write') },
+    batchUpdate: async (request) => { calls.push(request) },
+  } } } } } }
+  await saveGroupAttendance('2026-11-13', Array.from({ length: 20 }, (_, i) => ({ rowNumber: i + 2, status })))
+  expect(calls).toHaveLength(2)
+  expect(calls[0]).toBe('read')
+  expect(calls[1].resource.data).toHaveLength(19)
+  expect(calls[1].resource.data[0]).toEqual({ range: "'AutoAttendance'!M3", values: [[status]] })
+  const cached = await fetchAttendanceSheet()
+  expect(getStudentAttendanceHistory(cached, '19')).toEqual([{ date: 'Fri 13/11', status }])
+  expect(calls).toHaveLength(2)
+})
+
+test('new attendance dates and all statuses share one batch; unchanged saves make no writes', async () => {
+  const { saveGroupAttendance } = await import('../src/sheets/attendanceClient')
+  const status = ATTENDANCE_STATUSES[0].value
+  const values = [Array(12).fill(''), ['Alice', ...Array(11).fill('')], ['Bob', ...Array(11).fill('')]]
+  const calls = []
+  globalThis.window = { gapi: { client: { sheets: { spreadsheets: { values: {
+    get: async () => { calls.push('read'); return { result: { values: values.map((row) => [...row]) } } },
+    batchUpdate: async (request) => {
+      calls.push(request)
+      for (const cell of request.resource.data) values[Number(/M(\d+)$/.exec(cell.range)[1]) - 1][12] = cell.values[0][0]
+    },
+  } } } } } }
+  const updates = [{ rowNumber: 2, status }, { rowNumber: 3, status }]
+  await saveGroupAttendance('2026-11-13', updates)
+  expect(calls).toHaveLength(2)
+  expect(calls[1].resource.data).toHaveLength(3)
+  expect(getStudentAttendanceHistory(await fetchAttendanceSheet(), 'Alice')).toEqual([{ date: 'Fri 13/11', status }])
+  await saveGroupAttendance('2026-11-13', updates)
+  expect(calls).toHaveLength(3)
+  expect(calls[2]).toBe('read')
+  await saveGroupAttendance('2026-11-13', [])
+  expect(calls).toHaveLength(3)
+})
+
+test('failed attendance batches leave confirmed cached cells unchanged', async () => {
+  const { saveGroupAttendance } = await import('../src/sheets/attendanceClient')
+  const values = [Array(12).fill(''), ['Alice', ...Array(11).fill('')]]
+  let writes = 0
+  globalThis.window = { gapi: { client: { sheets: { spreadsheets: { values: {
+    get: async () => ({ result: { values } }),
+    batchUpdate: async () => { writes++; throw new Error('Batch failed') },
+  } } } } } }
+  await expect(saveGroupAttendance('2026-11-13', [{ rowNumber: 2, status: ATTENDANCE_STATUSES[0].value }])).rejects.toThrow('Batch failed')
+  expect(writes).toBe(1)
+  expect(getStudentAttendanceHistory(await fetchAttendanceSheet(), 'Alice')).toEqual([])
+})
 
 test('pages and memorization share one request while archived rows and fresh duplicate checks stay correct', async () => {
   const values = [['Student', 'Teacher', 'Page', 'Date', 'Archived'], ['Alice', 'Teacher', '1', '2026-11-07', ''], ['Bob', 'Teacher', '2', '2026-11-07', 'yes']]

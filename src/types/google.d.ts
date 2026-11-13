@@ -54,6 +54,13 @@ interface GapiClient {
         fields: string
       }): Promise<{ result: { sheets?: { properties: { sheetId: number; title: string } }[] } }>
       values: {
+        batchUpdate(params: {
+          spreadsheetId: string
+          resource: {
+            valueInputOption: string
+            data: { range: string; values: string[][] }[]
+          }
+        }): Promise<unknown>
         batchGet(params: {
           spreadsheetId: string
           ranges: string[]
@@ -66,8 +73,10 @@ interface GapiClient {
           spreadsheetId: string
           range: string
           valueInputOption: string
+          includeValuesInResponse?: boolean
+          responseValueRenderOption?: string
           resource: { values: string[][] }
-        }): Promise<unknown>
+        }): Promise<{ result: { updates?: { updatedRange?: string; updatedData?: { values?: string[][] } } } }>
         update(params: {
           spreadsheetId: string
           range: string

@@ -84,7 +84,6 @@ function attendanceFromRows(rows: string[][]): AttendanceSheet {
 
 export const attendanceQueryOptions = queryOptions({
   queryKey: ['attendance', config.attendanceSheetId, config.attendanceSheetName],
-  staleTime: 30_000,
   queryFn: () => withSheetsAccessErrorHandling(async () => {
     const response = await window.gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId: config.attendanceSheetId,
@@ -100,6 +99,7 @@ export function fetchAttendanceSheet(fresh = false): Promise<AttendanceSheet> {
 
 function patchAttendanceCell(session: number, rowNumber: number, column: number, value: string) {
   if (session !== cacheSession) return
+  const updatedAt = queryClient.getQueryState(attendanceQueryOptions.queryKey)?.dataUpdatedAt
   queryClient.setQueryData(attendanceQueryOptions.queryKey, (sheet) => {
     if (!sheet) return sheet
     const rows = [...sheet.rows]
@@ -107,7 +107,7 @@ function patchAttendanceCell(session: number, rowNumber: number, column: number,
     row[column] = value
     rows[rowNumber - 1] = row
     return attendanceFromRows(rows)
-  })
+  }, { updatedAt })
 }
 
 function findDateColumn(rows: string[][], dateLabel: string): number | null {
@@ -213,6 +213,7 @@ export async function saveStudentAttendance(
   if (!row) throw new Error('Student was not found in the attendance sheet.')
 
   const columnIndex = await ensureDateColumn(sheet, formatAttendanceDate(date))
+  if (row.values[columnIndex]?.trim() === status) return
   await updateAttendanceCell(row.rowNumber, columnIndex, status)
 }
 
@@ -220,9 +221,28 @@ export async function saveGroupAttendance(
   date: string,
   updates: AttendanceUpdate[],
 ): Promise<void> {
+  if (updates.length === 0) return
+  const session = cacheSession
   const sheet = await fetchAttendanceSheet(true)
-  const columnIndex = await ensureDateColumn(sheet, formatAttendanceDate(date))
-  for (const update of updates) {
-    await updateAttendanceCell(update.rowNumber, columnIndex, update.status)
+  const dateLabel = formatAttendanceDate(date)
+  const existingColumn = findDateColumn(sheet.rows, dateLabel)
+  const columnIndex = existingColumn ?? nextDateColumn(sheet.rows)
+  const changed = updates.filter((update) => sheet.rows[update.rowNumber - 1]?.[columnIndex]?.trim() !== update.status)
+  const data: Parameters<typeof window.gapi.client.sheets.spreadsheets.values.batchUpdate>[0]['resource']['data'] =
+    changed.map((update) => ({ range: cellRange(update.rowNumber, columnIndex), values: [[update.status]] }))
+  if (existingColumn === null) data.unshift({ range: cellRange(1, columnIndex), values: [[dateLabel]] })
+  if (data.length === 0) return
+  if (session !== cacheSession) throw new Error('Session changed')
+  await queryClient.cancelQueries({ queryKey: attendanceQueryOptions.queryKey })
+  await withSheetsAccessErrorHandling(() => window.gapi.client.sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: config.attendanceSheetId,
+    resource: {
+      valueInputOption: 'USER_ENTERED',
+      data,
+    },
+  }))
+  if (existingColumn === null) patchAttendanceCell(session, 1, columnIndex, dateLabel)
+  for (const update of changed) {
+    patchAttendanceCell(session, update.rowNumber, columnIndex, update.status)
   }
 }

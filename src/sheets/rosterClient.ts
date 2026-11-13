@@ -25,8 +25,8 @@ export interface GroupStudent extends ActivationStudent {
 
 const titleQuery = queryOptions({
   queryKey: ['roster-title', config.rosterSheetId, config.rosterGid],
-  staleTime: 60 * 60_000,
-  gcTime: 60 * 60_000,
+  staleTime: Infinity,
+  gcTime: Infinity,
   queryFn: async () => {
     const response = await withTokenRetry(() => window.gapi.client.sheets.spreadsheets.get({
       spreadsheetId: config.rosterSheetId,
@@ -40,7 +40,8 @@ const titleQuery = queryOptions({
 
 export const rosterQueryOptions = queryOptions({
   queryKey: ['roster', config.rosterSheetId, config.rosterGid, config.rosterNameColumn],
-  staleTime: 5 * 60_000,
+  staleTime: Infinity,
+  gcTime: Infinity,
   queryFn: async (): Promise<RosterSheet> => {
     try {
       const title = await queryClient.fetchQuery(titleQuery)
@@ -179,13 +180,29 @@ export async function appendRosterStudent(values: string[]): Promise<void> {
   const session = cacheSession
   try {
     const title = await queryClient.fetchQuery(titleQuery)
-    await withTokenRetry(() => window.gapi.client.sheets.spreadsheets.values.append({
+    await queryClient.cancelQueries({ queryKey: rosterQueryOptions.queryKey })
+    const snapshot = queryClient.getQueryData(rosterQueryOptions.queryKey)
+    const response = await withTokenRetry(() => window.gapi.client.sheets.spreadsheets.values.append({
       spreadsheetId: config.rosterSheetId,
       range: `${quoteSheetTitle(title)}!A:ZZ`,
       valueInputOption: 'USER_ENTERED',
+      includeValuesInResponse: true,
+      responseValueRenderOption: 'FORMATTED_VALUE',
       resource: { values: [values] },
     }))
-    if (session === cacheSession) await queryClient.invalidateQueries({ queryKey: rosterQueryOptions.queryKey })
+    if (session !== cacheSession) return
+    const sheet = queryClient.getQueryData(rosterQueryOptions.queryKey)
+    const appended = response?.result.updates?.updatedData?.values
+    const match = /!A(\d+):[A-Z]+(\d+)$/.exec(response?.result.updates?.updatedRange ?? '')
+    if (sheet && sheet === snapshot && !queryClient.getQueryState(rosterQueryOptions.queryKey)?.isInvalidated &&
+      appended?.length === 1 && match && Number(match[1]) === sheet.rows.length + 2 && match[1] === match[2]) {
+      const updatedAt = queryClient.getQueryState(rosterQueryOptions.queryKey)?.dataUpdatedAt
+      queryClient.setQueryData(rosterQueryOptions.queryKey, {
+        ...sheet, rows: [...sheet.rows, appended[0].map((value) => String(value ?? '').trim())],
+      }, { updatedAt })
+    } else {
+      await queryClient.invalidateQueries({ queryKey: rosterQueryOptions.queryKey, refetchType: 'none' })
+    }
   } catch (err) {
     handleRosterAccessError(err)
   }

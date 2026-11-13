@@ -6,6 +6,11 @@ export const RTL_LOCALES: Locale[] = ['ar']
 
 export const translations = {
   en: {
+    refreshData: 'Refresh data',
+    refreshingData: 'Loading data...',
+    refreshDataCooldown: 'Refresh available in one minute',
+    cachedDataHint: 'Student and teacher lists stay cached until refreshed. Refresh to see changes from other teachers.',
+    refreshDataError: 'Could not refresh all data. Wait one minute before trying again.',
     pagesActivateStudentHint: 'Page entry includes inactive students. Saving pages automatically activates the student.',
     pagesSavedActivationFailed: 'Pages saved, but {{student}} could not be activated. Retry activation below.',
     retryActivation: 'Retry activation',
@@ -188,6 +193,11 @@ export const translations = {
     statsCoverageMost: 'Most',
   },
   ar: {
+    refreshData: 'تحديث البيانات',
+    refreshingData: 'جار تحميل البيانات...',
+    refreshDataCooldown: 'يمكن التحديث بعد دقيقة',
+    cachedDataHint: 'تُحفظ قوائم الطلاب والمعلمين حتى تحدّثها. حدّث لرؤية تغييرات المعلمين الآخرين.',
+    refreshDataError: 'تعذر تحديث بعض البيانات. انتظر دقيقة قبل المحاولة مرة أخرى.',
     pagesActivateStudentHint: 'يشمل تسجيل الصفحات الطلاب غير النشطين. يُفعّل الطالب تلقائياً عند حفظ الصفحات.',
     pagesSavedActivationFailed: 'تم حفظ الصفحات، لكن تعذر تفعيل {{student}}. أعد محاولة التفعيل أدناه.',
     retryActivation: 'إعادة محاولة التفعيل',

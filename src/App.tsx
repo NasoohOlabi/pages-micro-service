@@ -15,6 +15,7 @@ import { LanguageSwitcher } from './i18n/LanguageSwitcher'
 import { UserMenu } from './auth/UserMenu'
 import { useLocale } from './i18n/LocaleContext'
 import { PwaUpdateToast } from './PwaUpdateToast'
+import { DataRefresh } from './DataRefresh'
 import { useQueryState } from './url/queryState'
 
 function App() {
@@ -39,32 +40,35 @@ function App() {
           {!accessToken ? (
             <SignInButton onClick={signIn} disabled={!ready} />
           ) : (
-            <StudentFilter key={user.email} ready={ready}>
-              <div className="flex w-full flex-col items-start gap-4 lg:flex-row lg:gap-6 print:block">
-                <Sidebar />
-                <main className="flex min-w-0 w-full flex-1 justify-center print:block" aria-label={t(TAB_LABELS[activeTab])}>
-              {activeTab === 'pages' ? (
-                <PagesTab user={user} ready={ready} />
-              ) : activeTab === 'memorization' ? (
-                <MemorizationView ready={ready} />
-              ) : activeTab === 'points' ? (
-                <PointsForm user={user} ready={ready} />
-              ) : activeTab === 'cst' ? (
-                <CstForm ready={ready} />
-              ) : activeTab === 'students' ? (
-                <RosterView ready={ready} />
-              ) : activeTab === 'activation' ? (
-                <ActivationView ready={ready} />
-              ) : activeTab === 'groups' ? (
-                <GroupView ready={ready} />
-              ) : activeTab === 'finals' ? (
-                <FinalsView ready={ready} />
-              ) : (
-                <AttendanceForm ready={ready} />
-              )}
-                </main>
-              </div>
-            </StudentFilter>
+            <>
+              <DataRefresh />
+              <StudentFilter key={user.email} ready={ready}>
+                <div className="flex w-full flex-col items-start gap-4 lg:flex-row lg:gap-6 print:block">
+                  <Sidebar />
+                  <main className="flex min-w-0 w-full flex-1 justify-center print:block" aria-label={t(TAB_LABELS[activeTab])}>
+                {activeTab === 'pages' ? (
+                  <PagesTab user={user} ready={ready} />
+                ) : activeTab === 'memorization' ? (
+                  <MemorizationView ready={ready} />
+                ) : activeTab === 'points' ? (
+                  <PointsForm user={user} ready={ready} />
+                ) : activeTab === 'cst' ? (
+                  <CstForm ready={ready} />
+                ) : activeTab === 'students' ? (
+                  <RosterView ready={ready} />
+                ) : activeTab === 'activation' ? (
+                  <ActivationView ready={ready} />
+                ) : activeTab === 'groups' ? (
+                  <GroupView ready={ready} />
+                ) : activeTab === 'finals' ? (
+                  <FinalsView ready={ready} />
+                ) : (
+                  <AttendanceForm ready={ready} />
+                )}
+                  </main>
+                </div>
+              </StudentFilter>
+            </>
           )}
         </div>
       )}

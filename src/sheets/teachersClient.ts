@@ -44,8 +44,8 @@ async function loadTeachers(): Promise<Teacher[]> {
 
 export const teachersQueryOptions = queryOptions({
   queryKey: ['teachers', config.teachersSheetId, config.teachersSheetName, config.teachersNameColumn, config.teachersEmailColumn],
-  staleTime: 15 * 60_000,
-  gcTime: 30 * 60_000,
+  staleTime: Infinity,
+  gcTime: Infinity,
   queryFn: loadTeachers,
 })
 
