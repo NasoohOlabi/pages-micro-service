@@ -2,6 +2,15 @@
 
 Quran Page Log: a React/TypeScript SPA (Vite) that lets teachers log student Quran-page recitations directly into a Google Sheet. No backend — auth and data access happen client-side via Google Identity Services and the `gapi` Sheets client.
 
+## Git etiquette and work records
+
+- Start each task by inspecting `git status` and the existing diff. Preserve unrelated work; include pre-existing edits only when the user authorizes it.
+- Document every change task in [docs/work-log.md](docs/work-log.md): date with timezone, the request and reason, what changed, verification results, and remaining limitations. Record the start time when known; label recovered work and unknown provenance honestly.
+- Always commit your work before handing back to the user, unless they explicitly request otherwise. Commit coherent units as you go during longer tasks. If interrupted or incomplete, make a clearly labeled WIP commit with the remaining work and failed checks documented.
+- Stage explicit paths or hunks, inspect the entire staged diff, and run `git diff --cached --check` before committing. Use a descriptive subject and a body explaining what changed, why, and how it was verified; reference the work log. Update behavior documentation in the same commit as the behavior.
+- Verify the commit with `git log -1` and `git status --short`. Finish with all your changes committed, report the commit hashes and any remaining changes, and state whether anything was pushed. If Git prevents a commit, report the exact blocker and affected paths rather than claiming completion.
+- Preserve existing history; amend, rewrite history, push, or create worktrees only when the user authorizes that action.
+
 ## Commands
 
 Use **bun** for everything — this repo has a `bun.lock`, not a `package-lock.json` or `yarn.lock`.
@@ -14,7 +23,7 @@ bun run lint                # oxlint
 bun run preview              # preview a production build
 ```
 
-There is no test suite. Treat `bun run build` (type-check) and `bun run lint` as the verification bar for any change.
+Run `bun run build` (type-check) and `bun run lint` for changes. For student activation, page logging, or visibility changes, also run `bun test scripts/student-activation.test.js` and `bun test scripts/student-filter.test.js`.
 
 ## Code layout
 
