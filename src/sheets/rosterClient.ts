@@ -109,6 +109,14 @@ async function patchRosterCell(session: number, rowNumber: number, column: numbe
 }
 
 export async function updateStudentActive(student: ActivationStudent): Promise<void> {
+  return writeStudentActive({ student, active: !student.active, checkStatus: true })
+}
+
+export async function activateStudent(student: ActivationStudent): Promise<void> {
+  return writeStudentActive({ student, active: true, checkStatus: false })
+}
+
+async function writeStudentActive({ student, active, checkStatus }: { student: ActivationStudent; active: boolean; checkStatus: boolean }): Promise<void> {
   const session = cacheSession
   try {
     const sheet = await fetchRosterSheet()
@@ -117,10 +125,16 @@ export async function updateStudentActive(student: ActivationStudent): Promise<v
       range: `${quoteSheetTitle(sheet.title)}!A${student.rowNumber}:ZZ${student.rowNumber}`,
     }))
     const row = response.result.values?.[0]
-    if (!row || String(row[sheet.nameColumnIndex] ?? '').trim() !== student.name || isActiveStudent(String(row[5] ?? '')) !== student.active) throw new Error('Roster changed')
+    if (!row || String(row[sheet.nameColumnIndex] ?? '').trim() !== student.name) throw new Error('Roster changed')
+    const currentActive = isActiveStudent(String(row[5] ?? ''))
+    if (checkStatus && currentActive !== student.active) throw new Error('Roster changed')
     if (session !== cacheSession) throw new Error('Session changed')
+    const value = active ? 'TRUE' : 'FALSE'
+    if (currentActive === active) {
+      await patchRosterCell(session, student.rowNumber, 5, value)
+      return
+    }
     await queryClient.cancelQueries({ queryKey: rosterQueryOptions.queryKey })
-    const value = student.active ? 'FALSE' : 'TRUE'
     await withTokenRetry(() => window.gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId: config.rosterSheetId,
       range: `${quoteSheetTitle(sheet.title)}!F${student.rowNumber}`,

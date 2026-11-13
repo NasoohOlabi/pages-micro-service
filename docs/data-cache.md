@@ -20,6 +20,8 @@ A warm status change makes two requests: a targeted row read to verify identity 
 
 Adding a student invalidates the roster once, since Sheets chooses the appended row. Page/points/CST appends invalidate only their affected sheet. Page statistics and memorization share raw sheet values, with separate projections for archived rows. Duplicate-page checks explicitly fetch fresh values before writing.
 
+Page entry offers inactive students regardless of the global filter. `savePageRows` appends pages, then explicitly ensures the student's column F is TRUE using a targeted live row read. Already active students need no status write. If activation fails after the append, the form reports that the pages were saved and offers an activation-only retry. The duplicate-page “log remaining pages” action uses the same save path.
+
 Attendance saves fetch current sheet data before writing and patch successful cells into the shared attendance cache, including history. They do not reload the whole sheet after each save.
 
 All caches clear on sign-out or account changes. In-flight roster mutations from an older session cannot repopulate the new session's cache. No spreadsheet data is persisted to browser storage.

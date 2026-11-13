@@ -10,6 +10,8 @@ All reads and writes go through `src/url/queryState.ts` (`useQueryState`). Compo
 
 The global `students=all` filter shows all students; absent means only roster students with column F (`نشط`) checked. This key persists across tabs. In active-only mode, students missing from the roster are excluded.
 
+Page entry always offers all roster students. Saving pages activates that student; the page statistics view still respects the global filter. Activation management also always lists all students.
+
 Each tab owns a closed set of keys. Changing tabs drops every key the new tab does not own.
 
 | Tab | Keys | Defaults (omitted from the URL) |

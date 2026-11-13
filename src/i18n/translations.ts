@@ -6,6 +6,10 @@ export const RTL_LOCALES: Locale[] = ['ar']
 
 export const translations = {
   en: {
+    pagesActivateStudentHint: 'Page entry includes inactive students. Saving pages automatically activates the student.',
+    pagesSavedActivationFailed: 'Pages saved, but {{student}} could not be activated. Retry activation below.',
+    retryActivation: 'Retry activation',
+    chooseRosterStudent: 'Select a student from the roster. The name must identify one student.',
     moveStudent: 'Move {{student}} to another group',
     moveToGroup: 'Choose destination group',
     confirmMove: 'Confirm move',
@@ -184,6 +188,10 @@ export const translations = {
     statsCoverageMost: 'Most',
   },
   ar: {
+    pagesActivateStudentHint: 'يشمل تسجيل الصفحات الطلاب غير النشطين. يُفعّل الطالب تلقائياً عند حفظ الصفحات.',
+    pagesSavedActivationFailed: 'تم حفظ الصفحات، لكن تعذر تفعيل {{student}}. أعد محاولة التفعيل أدناه.',
+    retryActivation: 'إعادة محاولة التفعيل',
+    chooseRosterStudent: 'اختر طالباً من القائمة. يجب أن يطابق الاسم طالباً واحداً.',
     moveStudent: 'نقل {{student}} إلى حلقة أخرى',
     moveToGroup: 'اختر الحلقة الجديدة',
     confirmMove: 'تأكيد النقل',

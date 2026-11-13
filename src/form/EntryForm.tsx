@@ -1,4 +1,5 @@
-import { useStudentFilter } from '../students/StudentFilterContext'
+import { activateStudent, type ActivationStudent } from '../sheets/rosterClient'
+import { savePageRows, PageStudentError } from '../sheets/pageLogging'
 import { useMemo, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -10,7 +11,6 @@ import {
   type SheetRowValues,
 } from '../sheets/schema'
 import {
-  appendRows,
   fetchExistingRows,
   findDuplicatePages,
   SheetsAccessError,
@@ -32,10 +32,11 @@ function today(): string {
 }
 
 export function EntryForm({ user, ready }: EntryFormProps) {
-  const visibleStudent = useStudentFilter()
   const { t } = useLocale()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [pendingActivation, setPendingActivation] = useState<ActivationStudent | null>(null)
+  const [isActivating, setIsActivating] = useState(false)
   const [pendingInsert, setPendingInsert] = useState<{
     rows: SheetRowValues[]
     values: EntryFormValues
@@ -98,7 +99,7 @@ export function EntryForm({ user, ready }: EntryFormProps) {
   }
 
   const onSubmit = async (values: EntryFormValues) => {
-    if (!visibleStudent(values.student)) { setSubmitError(t('studentHidden')); return }
+    if (pendingActivation || isInsertingRemaining) return
     setSubmitError(null)
     setSuccessMessage(null)
     setPendingInsert(null)
@@ -119,25 +120,46 @@ export function EntryForm({ user, ready }: EntryFormProps) {
         }
         return
       }
-      await appendRows(rows)
-      finishSubmit(rows, values)
+      await saveAndFinish(rows, values)
     } catch (err) {
       setSubmitError(
-        err instanceof SheetsAccessError ? err.message : t('saveError'),
+        err instanceof PageStudentError ? t('chooseRosterStudent') : err instanceof SheetsAccessError ? err.message : t('saveError'),
       )
     }
   }
 
+  const saveAndFinish = async (rows: SheetRowValues[], values: EntryFormValues) => {
+    const result = await savePageRows(rows)
+    finishSubmit(rows, values)
+    if (result.kind === 'activation-pending') {
+      setPendingActivation(result.student)
+      setSubmitError(t('pagesSavedActivationFailed', { student: result.student.name }))
+    }
+  }
+
+  const retryActivation = async () => {
+    if (!pendingActivation || isActivating) return
+    setIsActivating(true)
+    try {
+      await activateStudent(pendingActivation)
+      setPendingActivation(null)
+      setSubmitError(null)
+    } catch {
+      setSubmitError(t('pagesSavedActivationFailed', { student: pendingActivation.name }))
+    } finally {
+      setIsActivating(false)
+    }
+  }
+
   const handleInsertRemaining = async () => {
-    if (!pendingInsert) return
+    if (!pendingInsert || isInsertingRemaining || isSubmitting) return
     setIsInsertingRemaining(true)
     try {
-      await appendRows(pendingInsert.rows)
       setSubmitError(null)
-      finishSubmit(pendingInsert.rows, pendingInsert.values)
+      await saveAndFinish(pendingInsert.rows, pendingInsert.values)
     } catch (err) {
       setSubmitError(
-        err instanceof SheetsAccessError ? err.message : t('saveError'),
+        err instanceof PageStudentError ? t('chooseRosterStudent') : err instanceof SheetsAccessError ? err.message : t('saveError'),
       )
     } finally {
       setIsInsertingRemaining(false)
@@ -209,6 +231,7 @@ export function EntryForm({ user, ready }: EntryFormProps) {
                       onChange={onChange}
                       onBlur={onBlur}
                       ready={ready}
+                      includeInactive
                     />
                   )}
                 />
@@ -250,12 +273,14 @@ export function EntryForm({ user, ready }: EntryFormProps) {
         </div>
       ))}
 
+      <p className="text-xs text-gray-500">{t('pagesActivateStudentHint')}</p>
+
       {submitError && <p className="text-sm text-red-600">{submitError}</p>}
       {pendingInsert && (
         <button
           type="button"
           onClick={handleInsertRemaining}
-          disabled={isInsertingRemaining}
+          disabled={isInsertingRemaining || isSubmitting}
           className="min-h-11 rounded-md border border-indigo-600 px-4 py-3 text-base font-semibold text-indigo-600 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isInsertingRemaining
@@ -264,10 +289,11 @@ export function EntryForm({ user, ready }: EntryFormProps) {
         </button>
       )}
       {successMessage && <p className="text-sm text-green-600">{successMessage}</p>}
+      {pendingActivation && <button type="button" onClick={() => void retryActivation()} disabled={isActivating} className="min-h-11 rounded-md border border-indigo-600 px-4 py-2 font-semibold text-indigo-600 disabled:opacity-50">{isActivating ? t('saving') : t('retryActivation')}</button>}
 
       <button
         type="submit"
-        disabled={isSubmitting}
+        disabled={isSubmitting || isInsertingRemaining || pendingActivation !== null}
         className="min-h-11 rounded-md bg-indigo-600 px-4 py-3 text-base font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isSubmitting ? t('saving') : t('logPage')}

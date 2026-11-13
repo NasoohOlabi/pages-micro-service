@@ -14,14 +14,15 @@ interface StudentAutocompleteProps {
   onSelect?: (value: string) => void
   onBlur: () => void
   ready: boolean
+  includeInactive?: boolean
 }
 
 export const StudentAutocomplete = forwardRef<HTMLInputElement, StudentAutocompleteProps>(
-  function StudentAutocomplete({ id, value, onChange, onSelect, onBlur, ready }, forwardedRef) {
+  function StudentAutocomplete({ id, value, onChange, onSelect, onBlur, ready, includeInactive = false }, forwardedRef) {
     const visibleStudent = useStudentFilter()
     const { t } = useLocale()
     const rosterQuery = useQuery({ ...rosterQueryOptions, enabled: ready, select: rosterStudents })
-    const names = useMemo(() => [...new Set((rosterQuery.data ?? []).map((student) => student.name).filter(visibleStudent))], [rosterQuery.data, visibleStudent])
+    const names = useMemo(() => [...new Set((rosterQuery.data ?? []).map((student) => student.name).filter((name) => includeInactive || visibleStudent(name)))], [rosterQuery.data, visibleStudent, includeInactive])
     const loadError = rosterQuery.error ? rosterQuery.error instanceof SheetsAccessError ? rosterQuery.error.message : t('rosterLoadError') : null
     const [isOpen, setIsOpen] = useState(false)
     const [highlightedIndex, setHighlightedIndex] = useState(0)

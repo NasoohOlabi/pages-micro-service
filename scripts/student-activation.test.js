@@ -235,3 +235,73 @@ test('attendance cache updates its cells and history after successful writes wit
   expect(getStudentAttendanceHistory(updated, 'Alice')).toEqual([{ date: 'Sat 7/11', status: ATTENDANCE_STATUSES[0].value }])
   expect(calls).toEqual(['read', 'read', 'write', 'write'])
 })
+
+const { savePageRows, PageStudentError } = await import('../src/sheets/pageLogging')
+const { activateStudent } = await import('../src/sheets/rosterClient')
+
+function pageLoggingApi() {
+  const fixture = rosterApi()
+  const pages = []
+  fixture.api.values.append = async (request) => {
+    fixture.calls.push({ kind: 'pages-append', ...request })
+    pages.push(...request.resource.values)
+  }
+  return { ...fixture, pages }
+}
+
+const pageFor = (student) => [{ student, teacher: 'Teacher', page: 7, date: '2026-11-07' }]
+
+test('saving pages for an inactive student activates column F and updates shared roster data', async () => {
+  const { pages, calls, values } = pageLoggingApi()
+  expect((await fetchActivationStudents())[1].active).toBe(false)
+  calls.length = 0
+  expect(await savePageRows(pageFor('Bob'))).toEqual({ kind: 'saved' })
+  expect(pages).toHaveLength(1)
+  expect(values[3][5]).toBe('TRUE')
+  expect(values[3][8]).toBe('B')
+  expect((await fetchGroupStudents())[1].active).toBe(true)
+  expect(calls.map((call) => call.kind)).toEqual(['pages-append', 'read', 'write'])
+})
+
+test('page logging never toggles an already active student off and checks external status changes', async () => {
+  const { calls, values, pages } = pageLoggingApi()
+  await fetchRosterSheet()
+  calls.length = 0
+  await savePageRows(pageFor('Alice'))
+  expect(values[1][5]).toBe('TRUE')
+  expect(calls.map((call) => call.kind)).toEqual(['pages-append', 'read'])
+  values[1][5] = 'FALSE'
+  await savePageRows(pageFor('Alice'))
+  expect(values[1][5]).toBe('TRUE')
+  expect(pages).toHaveLength(2)
+})
+
+test('page append failures do not activate the student', async () => {
+  const { api, calls, values } = pageLoggingApi()
+  api.values.append = async () => { throw new Error('Append failed') }
+  await expect(savePageRows(pageFor('Bob'))).rejects.toThrow('Append failed')
+  expect(values[3][5]).toBe('FALSE')
+  expect(calls.some((call) => call.kind === 'write')).toBe(false)
+})
+
+test('activation failure after a page save can be retried without appending pages again', async () => {
+  const { api, pages } = pageLoggingApi()
+  const update = api.values.update
+  api.values.update = async () => { throw new Error('Activation failed') }
+  const result = await savePageRows(pageFor('Bob'))
+  expect(result.kind).toBe('activation-pending')
+  expect(pages).toHaveLength(1)
+  api.values.update = update
+  await activateStudent(result.student)
+  expect(pages).toHaveLength(1)
+  expect((await fetchActivationStudents())[1].active).toBe(true)
+})
+
+test('page logging rejects missing, ambiguous, and mixed student names before inserting rows', async () => {
+  const { values, pages } = pageLoggingApi()
+  values.push([...values[1]])
+  await expect(savePageRows(pageFor('Missing'))).rejects.toBeInstanceOf(PageStudentError)
+  await expect(savePageRows(pageFor('Alice'))).rejects.toBeInstanceOf(PageStudentError)
+  await expect(savePageRows([...pageFor('Bob'), ...pageFor('Other')])).rejects.toBeInstanceOf(PageStudentError)
+  expect(pages).toHaveLength(0)
+})
