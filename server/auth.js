@@ -5,6 +5,8 @@ import { join } from 'node:path'
 export const origin = process.env.APP_ORIGIN || 'http://localhost:5173'
 const redirect = origin + '/auth/callback'
 const client = { client_id: process.env.GOOGLE_CLIENT_ID, client_secret: process.env.GOOGLE_CLIENT_SECRET }
+const sessionMaxAge = 400 * 86400
+const sessionRenewalAge = 30 * 86400 * 1000
 const db = new Database(join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '.', 'sessions.sqlite'), {
   create: true,
 })
@@ -46,10 +48,12 @@ async function exchange(fields) {
     method: 'POST',
     body: new URLSearchParams({ ...client, ...fields }),
   })
-  if (!r.ok)
-    throw new Response('Google sign-in expired. Please sign in again.', {
-      status: r.status === 400 ? 401 : 502,
-    })
+  if (!r.ok) {
+    const error = await r.json().catch(() => null)
+    if (error?.error === 'invalid_grant')
+      throw new Response('Google sign-in expired. Please sign in again.', { status: 401 })
+    throw new Response('Google sign-in is temporarily unavailable.', { status: 502 })
+  }
   return r.json()
 }
 
@@ -78,9 +82,9 @@ export async function callback(req, url) {
     tokens.access_token,
     tokens.refresh_token || '',
     Date.now() + tokens.expires_in * 1000,
-    Date.now() + 30 * 86400000,
+    Date.now() + sessionMaxAge * 1000,
   )
-  const res = home({ 'set-cookie': cookie('sid', id, 30 * 86400) })
+  const res = home({ 'set-cookie': cookie('sid', id, sessionMaxAge) })
   res.headers.append('set-cookie', cookie('flow', '', 0))
   return res
 }
@@ -88,6 +92,16 @@ export async function callback(req, url) {
 export function session(req) {
   const id = cookies(req).get('sid')
   return id && db.query('SELECT * FROM sessions WHERE id = ? AND deadline > ?').get(hash(id), Date.now())
+}
+
+export function renewSession(req, res, s) {
+  const now = Date.now()
+  const deadline = now + sessionMaxAge * 1000
+  if (s.deadline > deadline - sessionRenewalAge) return
+  const { changes } = db
+    .query('UPDATE sessions SET deadline = ? WHERE id = ? AND deadline = ? AND deadline > ?')
+    .run(deadline, s.id, s.deadline, now)
+  if (changes) res.headers.append('set-cookie', cookie('sid', cookies(req).get('sid'), sessionMaxAge))
 }
 
 export function logout(req) {
@@ -108,12 +122,15 @@ async function refresh(s) {
   return tokens.access_token
 }
 
-export function access(s, force = false) {
-  if (!force && s.expiry > Date.now() + 60000) return s.token
+export function access(s, rejectedToken) {
+  if (rejectedToken === undefined && s.expiry > Date.now() + 60000) return s.token
+  const current = db.query('SELECT * FROM sessions WHERE id = ? AND deadline > ?').get(s.id, Date.now())
+  if (!current) throw new Response('Sign in again.', { status: 401 })
+  if (current.token !== rejectedToken && current.expiry > Date.now() + 60000) return current.token
   if (!pending.has(s.id))
     pending.set(
       s.id,
-      refresh(s).finally(() => pending.delete(s.id)),
+      refresh(current).finally(() => pending.delete(s.id)),
     )
   return pending.get(s.id)
 }

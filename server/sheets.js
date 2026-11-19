@@ -26,8 +26,9 @@ export async function sheets(req, path, session) {
         headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
         body: body && JSON.stringify(body),
       })
-    let r = await call(await access(session))
-    if (r.status === 401) r = await call(await access(session, true))
+    const token = await access(session)
+    let r = await call(token)
+    if (r.status === 401) r = await call(await access(session, token))
     if (!r.ok) throw new Response('Google Sheets request failed.', { status: r.status })
     return r.json()
   }

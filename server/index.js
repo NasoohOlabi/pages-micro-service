@@ -1,5 +1,5 @@
 import { ZodError } from 'zod'
-import { callback, login, logout, origin, session } from './auth'
+import { callback, login, logout, origin, renewSession, session } from './auth'
 import { sheets } from './sheets'
 
 const files = new Map()
@@ -50,6 +50,7 @@ Bun.serve({
         else if (path === '/api/logout' && req.method === 'POST') res = logout(req)
         else if (!s) res = new Response('Sign in required.', { status: 401 })
         else res = Response.json(await sheets(req, path.slice(5), s))
+        if (s && res.ok && path !== '/api/logout') renewSession(req, res, s)
       }
     } catch (err) {
       if (err instanceof Response) res = err
