@@ -1,6 +1,33 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
+import { saveAttendance as planAttendanceSave } from '../server/attendance'
 
-mock.module('../src/config', () => ({ config: { rosterSheetId: 'roster', rosterGid: '42', rosterNameColumn: 'A', sheetId: 'logs', sheetRange: 'Pages!A2:D', pointsSheetRange: 'Points!A2:E', cstSheetRange: 'CST!A2:D', attendanceSheetId: 'attendance', attendanceSheetName: 'AutoAttendance', teachersSheetId: 'teachers', teachersSheetName: 'Teachers', teachersNameColumn: 'A', teachersEmailColumn: 'B' } }))
+mock.module('../src/sheets/transport', () => ({
+  saveAttendance: (request) => {
+    const transport = window.gapi.client.sheets.spreadsheets.values
+    return planAttendanceSave(request, "'AutoAttendance'",
+      async () => (await transport.get({ range: "'AutoAttendance'!A1:ZZ" })).result.values ?? [],
+      (resource) => transport.batchUpdate({ spreadsheetId: 'attendance', resource }),
+    )
+  },
+  spreadsheets: {
+    get: async (params) => {
+      try {
+        return await window.gapi.client.sheets.spreadsheets.get(params)
+      } catch (error) {
+        if (error?.status === 403) throw new SheetsAccessError()
+        throw error
+      }
+    },
+    values: {
+      get: (params) => window.gapi.client.sheets.spreadsheets.values.get(params),
+      batchGet: (params) => window.gapi.client.sheets.spreadsheets.values.batchGet(params),
+      append: (params) => window.gapi.client.sheets.spreadsheets.values.append(params),
+      update: (params) => window.gapi.client.sheets.spreadsheets.values.update(params),
+      batchUpdate: (params) => window.gapi.client.sheets.spreadsheets.values.batchUpdate(params),
+    },
+  },
+}))
+
 const { fetchActivationStudents, updateStudentActive, fetchRosterSheet, SheetsAccessError } = {
   ...await import('../src/sheets/rosterClient'),
   ...await import('../src/sheets/sheetsClient'),
@@ -13,7 +40,7 @@ test('activation preserves physical rows and writes only F, refreshing the cache
   const values = [['Name', '', '', '', '', 'Active'], ['Active', '', '', '', '', 'TRUE'], [], ['', '', 'summary'], ['Disabled', '', '', '', '', 'FALSE']]
   const writes = []
   globalThis.window = { gapi: { client: { sheets: { spreadsheets: {
-    get: async () => ({ result: { sheets: [{ properties: { sheetId: 42, title: "Roster's tab" } }] } }),
+    get: async () => ({ result: { sheets: [{ properties: { sheetId: 0, title: "Roster's tab" } }] } }),
     values: {
       get: async ({ range }) => {
         const match = /!A(\d+):ZZ\d+$/.exec(range)
@@ -64,7 +91,7 @@ function rosterApi() {
     return (match ? values.slice(Number(match[1]) - 1, Number(match[2])) : values).map((row) => [...row])
   }
   const api = {
-    get: async (request) => { calls.push({ kind: 'metadata', ...request }); return { result: { sheets: [{ properties: { sheetId: 42, title: 'Info' } }] } } },
+    get: async (request) => { calls.push({ kind: 'metadata', ...request }); return { result: { sheets: [{ properties: { sheetId: 0, title: 'Info' } }] } } },
     values: {
       get: async (request) => { calls.push({ kind: 'read', ...request }); return { result: { values: read(request.range) } } },
       batchGet: async (request) => { calls.push({ kind: 'batch', ...request }); return { result: { valueRanges: request.ranges.map((range) => ({ values: read(range) })) } } },
@@ -513,11 +540,13 @@ test('attendance cache updates its cells and history after successful writes wit
   const calls = []
   globalThis.window = { gapi: { client: { sheets: { spreadsheets: { values: {
     get: async () => { calls.push('read'); return { result: { values: values.map((row) => [...row]) } } },
-    update: async (request) => {
+    batchUpdate: async ({ resource }) => {
       calls.push('write')
-      const match = /!([A-Z]+)(\d+)$/.exec(request.range)
-      const column = [...match[1]].reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0) - 1
-      values[Number(match[2]) - 1][column] = request.resource.values[0][0]
+      for (const entry of resource.data) {
+        const match = /!([A-Z]+)(\d+)$/.exec(entry.range)
+        const column = [...match[1]].reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0) - 1
+        values[Number(match[2]) - 1][column] = entry.values[0][0]
+      }
     },
   } } } } } }
   await fetchAttendanceSheet()
@@ -526,7 +555,7 @@ test('attendance cache updates its cells and history after successful writes wit
   await saveStudentAttendance('Alice', '2026-11-07', ATTENDANCE_STATUSES[0].value)
   const updated = await fetchAttendanceSheet()
   expect(getStudentAttendanceHistory(updated, 'Alice')).toEqual([{ date: 'Sat 7/11', status: ATTENDANCE_STATUSES[0].value }])
-  expect(calls).toEqual(['read', 'read', 'write', 'write'])
+  expect(calls).toEqual(['read', 'read', 'write'])
 })
 
 const { savePageRows, PageStudentError } = await import('../src/sheets/pageLogging')

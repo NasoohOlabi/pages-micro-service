@@ -1,14 +1,13 @@
+import { spreadsheets } from './transport'
 import { queryOptions } from '@tanstack/react-query'
 import { queryClient } from '../queryClient'
 import { config } from '../config'
-import { withTokenRetry } from '../auth/token'
 import { SheetsAccessError } from './sheetsClient'
 
 export interface Teacher {
   name: string
   email: string
 }
-
 
 function quoteSheetTitle(title: string): string {
   return `'${title.replace(/'/g, "''")}'`
@@ -17,12 +16,10 @@ function quoteSheetTitle(title: string): string {
 async function loadTeachers(): Promise<Teacher[]> {
   try {
     const range = `${quoteSheetTitle(config.teachersSheetName)}!${config.teachersNameColumn}2:${config.teachersEmailColumn}`
-    const response = await withTokenRetry(() =>
-      window.gapi.client.sheets.spreadsheets.values.get({
-        spreadsheetId: config.teachersSheetId,
-        range,
-      }),
-    )
+    const response = await spreadsheets.values.get({
+      spreadsheetId: config.teachersSheetId,
+      range,
+    })
     const nameIdx = 0
     const emailIdx = config.teachersEmailColumn.charCodeAt(0) - config.teachersNameColumn.charCodeAt(0)
     const rows = response.result.values ?? []
@@ -31,9 +28,7 @@ async function loadTeachers(): Promise<Teacher[]> {
       .filter((teacher) => teacher.name)
     return teachers
   } catch (err) {
-    const status = (err as { status?: number; result?: { error?: { code?: number } } })?.status
-    const code = status ?? (err as { result?: { error?: { code?: number } } })?.result?.error?.code
-    if (code === 403) {
+    if (err instanceof SheetsAccessError) {
       throw new SheetsAccessError(
         "You don't have access to the teachers sheet — ask an admin to share it with you.",
       )
@@ -43,7 +38,13 @@ async function loadTeachers(): Promise<Teacher[]> {
 }
 
 export const teachersQueryOptions = queryOptions({
-  queryKey: ['teachers', config.teachersSheetId, config.teachersSheetName, config.teachersNameColumn, config.teachersEmailColumn],
+  queryKey: [
+    'teachers',
+    config.teachersSheetId,
+    config.teachersSheetName,
+    config.teachersNameColumn,
+    config.teachersEmailColumn,
+  ],
   staleTime: Infinity,
   gcTime: Infinity,
   queryFn: loadTeachers,

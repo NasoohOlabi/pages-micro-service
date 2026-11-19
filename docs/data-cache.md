@@ -10,7 +10,7 @@ React Query owns server data. Components use `useQuery`; form drafts and URL sta
 | Page, points, CST logs | 15 minutes | 4 hours in memory |
 | Attendance | 15 minutes | 4 hours in memory |
 
-Fresh queries are reused and concurrent requests are deduplicated. Successful stale queries refresh when their screen is opened. Window focus and network reconnects do not trigger requests; there is no polling. Queries and mutations have no automatic retries, and revisiting a failed query does not retry it. The existing token handler still refreshes a rejected Google token once. Retry buttons explicitly refetch failed roster queries.
+Fresh queries are reused and concurrent requests are deduplicated. Successful stale queries refresh when their screen is opened. Window focus and network reconnects do not trigger requests; there is no polling. Queries and mutations have no automatic retries, and revisiting a failed query does not retry it. Railway refreshes expired access tokens and retries a Google Sheets 401 once. Retry buttons explicitly refetch failed roster queries.
 
 The signed-in **Refresh data** button invalidates cached data but fetches only active queries. Unused data waits until its screen is opened. The button has a one-minute cooldown to avoid repeated bursts, and reports refresh failures. Student and teacher lists do not automatically pick up other teachers' changes; use this button to fetch them.
 
@@ -22,20 +22,20 @@ Groups, activation, autocomplete, student lists, finals, memorization, and the g
 
 A warm status change makes two requests: a targeted row read to verify identity and status, then a column F write. A group change uses one batch read for the header and student row, then a group-cell write. Successful writes immutably patch the shared cache; they do not reload the roster. Failed writes leave the last confirmed value and mark the roster stale so the next access can reload it. Patching preserves the original snapshot timestamp.
 
-Roster and page/points/CST appends request confirmed formatted values in the append response and patch a warm cache when the returned physical rows are contiguous with the cached snapshot. They do not issue a post-save read. If the server reports a gap, the snapshot changed during the write, or response details are unavailable, only the affected cache is invalidated for the next access. Concurrent out-of-order append responses cannot turn an incomplete snapshot into a fresh cache. Page statistics and memorization share raw sheet values, with separate projections for archived rows. Duplicate-page checks explicitly fetch fresh values before writing.
+Roster and page/points/CST appends request confirmed formatted values in the append response and patch a warm cache when the returned physical rows are contiguous with the cached snapshot. They do not issue a post-save read. If the server reports a gap, the snapshot changed during the write, or response details are unavailable, only the affected cache is invalidated for the next access. Concurrent out-of-order append responses cannot turn an incomplete snapshot into a fresh cache. Page statistics and memorization share raw sheet values, with separate projections for archived rows. Railway checks fresh page values, including archived rows, under the same write queue as the append. The form can offer to save only the remaining pages.
 
 Page entry offers inactive students regardless of the global filter. `savePageRows` appends pages, then explicitly ensures the student's column F is TRUE using a targeted live row read. Already active students need no status write. If activation fails after the append, the form reports that the pages were saved and offers an activation-only retry. The duplicate-page “log remaining pages” action uses the same save path.
 
-Attendance saves fetch current sheet data before writing and skip unchanged statuses. Group and multi-student saves send all changed cells and any new date header in one `values.batchUpdate` call: one fresh read plus at most one write, regardless of group size. Empty saves make no requests. Successful cells patch the shared attendance cache, including history; failed batches do not patch it. There is no post-save reload.
+Attendance saves fetch current sheet data before writing and skip unchanged statuses. Railway serializes attendance saves and sends changed cells and any new date header in one Sheets request. Each save uses one fresh read and at most one batch write. Empty saves make no requests. A confirmed save returns the updated rows for the shared attendance cache and history. A failed batch leaves the cache intact. There is no post-save reload.
 
-Roster data, its tab title, and teacher lists are saved in `localStorage` under `quran-reference-cache-v1`, scoped to the signed-in email and the query's spreadsheet configuration. Their contents and timestamps are validated before restoration. Invalidations are saved too, so a deferred refresh still occurs after a reload. Blocked, full or corrupt storage falls back to in-memory caching. Logs and attendance are never persisted.
+Roster data, its tab title, and teacher lists are saved in `localStorage` under `quran-reference-cache-v1`, scoped to the signed-in email and the logical sheet name. Their contents and timestamps are validated before restoration. Invalidations are saved too, so a deferred refresh still occurs after a reload. Blocked, full or corrupt storage falls back to in-memory caching. Logs and attendance are never persisted.
 
 All caches, including the saved browser copy, clear on sign-out or account changes. In-flight roster mutations and log appends from an older session cannot repopulate the new session's cache. Normal browser reloads preserve reference data for the same signed-in account.
 
 ## Verification
 
 ```sh
-bun test scripts/student-activation.test.js scripts/student-filter.test.js
+bun test
 bun run build
 bun run lint
 ```

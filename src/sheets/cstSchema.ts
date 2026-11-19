@@ -23,7 +23,7 @@ export interface CstRowValues {
   date: string
 }
 
-// Order must match the CST sheet columns (and VITE_CST_SHEET_RANGE).
+// Order must match the CST sheet columns (and CST_SHEET_RANGE).
 export const CST_COLUMN_ORDER: (keyof CstRowValues)[] = ['student', 'sabr', 'mark', 'date']
 
 export function cstRowToValues(values: CstRowValues): string[] {

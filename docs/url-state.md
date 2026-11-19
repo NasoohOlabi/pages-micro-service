@@ -2,7 +2,7 @@
 
 View state lives in the query string so a pasted link restores the same screen. Tabs, sub-tabs, filters, dates, search, and chart views are query state. Drafts, toasts, and auth are not.
 
-There is no router. Firebase already rewrites every path to `index.html`. Search params are the URL.
+Railway serves the app at /. Search parameters identify the view and survive the Google sign-in redirect.
 
 All reads and writes go through `src/url/queryState.ts` (`useQueryState`). Components do not call `URLSearchParams`, `pushState`, or `replaceState`.
 

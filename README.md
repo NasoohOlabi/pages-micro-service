@@ -1,63 +1,11 @@
 # Quran Page Log
 
-A small React + TypeScript app for logging which Quran page each student has recited to, backed directly by a Google Sheet (no server). Teachers sign in with Google, search for a student, and log a page; entries are appended to the configured sheet via the Sheets API, with duplicate-entry protection.
+Railway hosts the React app and Bun API. Teachers use it for recitation, memorization, attendance, points, CST, roster, groups, activation, and Finals reports with PDF export. Teachers sign in with Google. The server calls Sheets with each teacher's permissions and stores OAuth credentials in SQLite on the Railway volume. The browser receives an HTTP-only session cookie with a rolling lifetime. The server refreshes Google access tokens as needed. Firebase Hosting serves a link to the new site.
 
-## Stack
+## Development
 
-- [Vite](https://vitejs.dev/) + React 19 + TypeScript
-- [Tailwind CSS v4](https://tailwindcss.com/) (via `@tailwindcss/vite`)
-- [react-hook-form](https://react-hook-form.com/) + [zod](https://zod.dev/) for form state/validation
-- [fuse.js](https://www.fusejs.io/) for fuzzy student-name search
-- Google Identity Services + `gapi` client for auth and the Sheets API
-- [Oxlint](https://oxc.rs/) for linting
-- Deployed to Firebase Hosting
+Copy .env.example to .env.local and fill in the Google OAuth web client and sheet settings. Register APP_ORIGIN/auth/callback as an authorized Google redirect URI. Run bun install, then bun run dev:api and bun run dev in separate terminals. Run bun run build, bun run lint, and bun test to check changes. The Railway API test starts a local server and supplies fixture Google responses.
 
-Package manager is **bun** — use `bun`, not `npm`/`yarn`/`pnpm`.
+## Production
 
-## Deep links
-
-Tabs, sub-tabs, and filters live in the query string so a pasted URL restores the same screen. There is no client router.
-
-```
-?tab=pages&sub=stats&view=coverage&from=2026-08-01&to=2026-08-31&student=Ahmad
-?tab=attendance&sub=group&date=2026-09-05&group=A
-?tab=students&q=ahmad
-?tab=finals&factor=1.5&sort=pages
-```
-
-Owned keys, history rules (`pushState` vs `replaceState`), and what stays in React are in [docs/url-state.md](docs/url-state.md). Agents: that file is also in [AGENTS.md](AGENTS.md).
-
-## Setup
-
-```sh
-bun install
-cp .env.example .env.local
-```
-
-Fill in `.env.local`:
-
-| Var | Description |
-| --- | --- |
-| `VITE_GOOGLE_CLIENT_ID` | OAuth client ID for Google sign-in (Sheets + userinfo scopes) |
-| `VITE_SHEET_ID` | Spreadsheet ID where entries are logged |
-| `VITE_SHEET_RANGE` | Data range, header row excluded (e.g. `Sheet1!A2:D`) |
-| `VITE_ROSTER_SHEET_ID` | Spreadsheet ID holding the student roster |
-| `VITE_ROSTER_GID` | gid of the roster tab (from the sheet URL's `#gid=...`) |
-| `VITE_ROSTER_NAME_COLUMN` | Column letter in the roster tab holding student full names |
-| `VITE_TEACHERS_SHEET_ID` | Spreadsheet ID holding the Teachers tab |
-| `VITE_TEACHERS_SHEET_NAME` | Tab name (in `VITE_TEACHERS_SHEET_ID`) listing teachers |
-| `VITE_TEACHERS_NAME_COLUMN` | Column letter in the teachers tab holding teacher full names |
-| `VITE_TEACHERS_EMAIL_COLUMN` | Column letter in the teachers tab holding teacher emails |
-
-## Scripts
-
-```sh
-bun run dev       # start the Vite dev server
-bun run build     # type-check (tsc -b) then build for production
-bun run lint      # run oxlint
-bun run preview   # preview the production build locally
-```
-
-## Deployment
-
-Pushes to `main` trigger [.github/workflows/firebase-hosting.yml](.github/workflows/firebase-hosting.yml), which builds with bun and deploys `dist/` to Firebase Hosting (project `mrp-masjid-al-botty`). Build-time env vars come from GitHub Actions repo variables (`VITE_GOOGLE_CLIENT_ID`, `VITE_SHEET_ID`, `VITE_SHEET_RANGE`); the roster vars currently aren't wired into CI.
+Fetch and verify origin/master, then deploy the committed revision with bunx @railway/cli up to the quran-page-log service. Check the deployment status and its /health endpoint. Set APP_ORIGIN to the HTTPS public origin and mount a persistent volume at /data. Set the worksheet ranges in Railway, including CST_SHEET_RANGE (defaults to CST!A2:D). Use one service replica for SQLite sessions and serialized sheet writes. To publish the migration link, run bunx firebase-tools deploy --only hosting --project pages-micro-service.

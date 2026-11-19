@@ -10,11 +10,7 @@ import {
   type EntryFormValues,
   type SheetRowValues,
 } from '../sheets/schema'
-import {
-  fetchExistingRows,
-  findDuplicatePages,
-  SheetsAccessError,
-} from '../sheets/sheetsClient'
+import { DuplicatePagesError, SheetsAccessError } from '../sheets/sheetsClient'
 import { FIELDS } from './fields'
 import { StudentAutocomplete } from './StudentAutocomplete'
 import { TeacherSelect } from './TeacherSelect'
@@ -70,9 +66,7 @@ export function EntryForm({ user, ready }: EntryFormProps) {
   }
 
   const finishSubmit = (rows: SheetRowValues[], values: EntryFormValues) => {
-    const isContiguous = rows.every(
-      (row, i) => i === 0 || row.page === rows[i - 1].page + 1,
-    )
+    const isContiguous = rows.every((row, i) => i === 0 || row.page === rows[i - 1].page + 1)
     setSuccessMessage(
       rows.length === 1
         ? t('loggedSinglePage', { page: rows[0].page, student: values.student })
@@ -103,37 +97,31 @@ export function EntryForm({ user, ready }: EntryFormProps) {
     setSubmitError(null)
     setSuccessMessage(null)
     setPendingInsert(null)
-    try {
-      const rows = expandPageRange(values)
-      const existingRows = await fetchExistingRows({ includeArchived: true, fresh: true })
-      const duplicatePages = findDuplicatePages(existingRows, rows)
-      if (duplicatePages.length > 0) {
-        const newRows = rows.filter((row) => !duplicatePages.includes(row.page))
-        setSubmitError(
-          t('duplicatePagesFound', {
-            student: values.student,
-            pages: duplicatePages.join(', '),
-          }),
-        )
-        if (newRows.length > 0) {
-          setPendingInsert({ rows: newRows, values })
-        }
-        return
-      }
-      await saveAndFinish(rows, values)
-    } catch (err) {
-      setSubmitError(
-        err instanceof PageStudentError ? t('chooseRosterStudent') : err instanceof SheetsAccessError ? err.message : t('saveError'),
-      )
-    }
+    await saveAndFinish(expandPageRange(values), values)
   }
 
   const saveAndFinish = async (rows: SheetRowValues[], values: EntryFormValues) => {
-    const result = await savePageRows(rows)
-    finishSubmit(rows, values)
-    if (result.kind === 'activation-pending') {
-      setPendingActivation(result.student)
-      setSubmitError(t('pagesSavedActivationFailed', { student: result.student.name }))
+    try {
+      const result = await savePageRows(rows)
+      finishSubmit(rows, values)
+      if (result.kind === 'activation-pending') {
+        setPendingActivation(result.student)
+        setSubmitError(t('pagesSavedActivationFailed', { student: result.student.name }))
+      }
+    } catch (err) {
+      if (err instanceof DuplicatePagesError) {
+        const remaining = rows.filter((row) => !err.pages.includes(row.page))
+        setSubmitError(t('duplicatePagesFound', { student: values.student, pages: err.pages.join(', ') }))
+        setPendingInsert(remaining.length ? { rows: remaining, values } : null)
+        return
+      }
+      setSubmitError(
+        err instanceof PageStudentError
+          ? t('chooseRosterStudent')
+          : err instanceof SheetsAccessError
+            ? err.message
+            : t('saveError'),
+      )
     }
   }
 
@@ -157,20 +145,13 @@ export function EntryForm({ user, ready }: EntryFormProps) {
     try {
       setSubmitError(null)
       await saveAndFinish(pendingInsert.rows, pendingInsert.values)
-    } catch (err) {
-      setSubmitError(
-        err instanceof PageStudentError ? t('chooseRosterStudent') : err instanceof SheetsAccessError ? err.message : t('saveError'),
-      )
     } finally {
       setIsInsertingRemaining(false)
     }
   }
 
   return (
-    <form
-      onSubmit={handleSubmit(onSubmit)}
-      className="mx-auto flex w-full max-w-md flex-col gap-4 p-6"
-    >
+    <form onSubmit={handleSubmit(onSubmit)} className="mx-auto flex w-full max-w-md flex-col gap-4 p-6">
       {FIELDS.filter((field) => field.name !== 'endPage').map((field) => (
         <div key={field.name} className="flex flex-col gap-1 text-start">
           {field.name === 'startPage' ? (
@@ -188,9 +169,7 @@ export function EntryForm({ user, ready }: EntryFormProps) {
                   {...register('startPage', { onBlur: handleStartPageBlur })}
                   className="rounded-md border border-gray-300 px-3 py-3 text-base focus:border-indigo-500 focus:outline-none"
                 />
-                {errors.startPage && (
-                  <p className="text-sm text-red-600">{errors.startPage.message}</p>
-                )}
+                {errors.startPage && <p className="text-sm text-red-600">{errors.startPage.message}</p>}
               </div>
               <div className="flex flex-1 flex-col gap-1">
                 <label htmlFor="endPage" className="text-sm font-medium text-gray-700">
@@ -205,9 +184,7 @@ export function EntryForm({ user, ready }: EntryFormProps) {
                   {...register('endPage')}
                   className="rounded-md border border-gray-300 px-3 py-3 text-base focus:border-indigo-500 focus:outline-none"
                 />
-                {errors.endPage && (
-                  <p className="text-sm text-red-600">{errors.endPage.message}</p>
-                )}
+                {errors.endPage && <p className="text-sm text-red-600">{errors.endPage.message}</p>}
               </div>
             </div>
           ) : (
@@ -265,9 +242,7 @@ export function EntryForm({ user, ready }: EntryFormProps) {
                   className="rounded-md border border-gray-300 px-3 py-3 text-base focus:border-indigo-500 focus:outline-none"
                 />
               )}
-              {errors[field.name] && (
-                <p className="text-sm text-red-600">{errors[field.name]?.message}</p>
-              )}
+              {errors[field.name] && <p className="text-sm text-red-600">{errors[field.name]?.message}</p>}
             </>
           )}
         </div>
@@ -289,7 +264,16 @@ export function EntryForm({ user, ready }: EntryFormProps) {
         </button>
       )}
       {successMessage && <p className="text-sm text-green-600">{successMessage}</p>}
-      {pendingActivation && <button type="button" onClick={() => void retryActivation()} disabled={isActivating} className="min-h-11 rounded-md border border-indigo-600 px-4 py-2 font-semibold text-indigo-600 disabled:opacity-50">{isActivating ? t('saving') : t('retryActivation')}</button>}
+      {pendingActivation && (
+        <button
+          type="button"
+          onClick={() => void retryActivation()}
+          disabled={isActivating}
+          className="min-h-11 rounded-md border border-indigo-600 px-4 py-2 font-semibold text-indigo-600 disabled:opacity-50"
+        >
+          {isActivating ? t('saving') : t('retryActivation')}
+        </button>
+      )}
 
       <button
         type="submit"

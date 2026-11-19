@@ -30,7 +30,7 @@ export interface PointsRowValues {
   reason: string
 }
 
-// Order must match the Points sheet columns (and VITE_POINTS_SHEET_RANGE).
+// Order must match the Points sheet columns (and POINTS_SHEET_RANGE).
 export const POINTS_COLUMN_ORDER: (keyof PointsRowValues)[] = [
   'student',
   'teacher',

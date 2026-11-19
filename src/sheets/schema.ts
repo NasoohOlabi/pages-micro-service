@@ -35,7 +35,7 @@ export interface SheetRowValues {
   date: string
 }
 
-// Order must match the sheet's columns (and VITE_SHEET_RANGE), e.g. Sheet1!A2:D -> student, teacher, page, date
+// Order must match the sheet's columns (and SHEET_RANGE), e.g. Sheet1!A2:D -> student, teacher, page, date
 export const COLUMN_ORDER: (keyof SheetRowValues)[] = ['student', 'teacher', 'page', 'date']
 
 // A student shouldn't log the same page twice.

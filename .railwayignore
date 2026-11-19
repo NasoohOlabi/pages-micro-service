@@ -1,0 +1,11 @@
+.env*
+*.csv
+*.rar
+*.sqlite*
+.git
+.firebase
+.agents
+.claude
+node_modules
+dist
+*.log
