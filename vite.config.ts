@@ -5,6 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: { proxy: { '/api': 'http://localhost:3000', '/auth': 'http://localhost:3000' } },
   plugins: [
     react(),
     tailwindcss(),
@@ -12,6 +13,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon-180x180.png'],
       workbox: {
+        navigateFallbackDenylist: [/^\/auth\//, /^\/api\//],
         cleanupOutdatedCaches: true,
       },
       manifest: {

@@ -10,8 +10,6 @@ import {
 } from '../sheets/schema'
 import {
   appendRows,
-  fetchExistingRows,
-  findDuplicatePages,
   SheetsAccessError,
 } from '../sheets/sheetsClient'
 import { FIELDS } from './fields'
@@ -101,8 +99,7 @@ export function EntryForm({ user, ready }: EntryFormProps) {
     setPendingInsert(null)
     try {
       const rows = expandPageRange(values)
-      const existingRows = await fetchExistingRows()
-      const duplicatePages = findDuplicatePages(existingRows, rows)
+      const duplicatePages = await appendRows(rows)
       if (duplicatePages.length > 0) {
         const newRows = rows.filter((row) => !duplicatePages.includes(row.page))
         setSubmitError(
@@ -116,7 +113,6 @@ export function EntryForm({ user, ready }: EntryFormProps) {
         }
         return
       }
-      await appendRows(rows)
       finishSubmit(rows, values)
     } catch (err) {
       setSubmitError(
@@ -129,7 +125,13 @@ export function EntryForm({ user, ready }: EntryFormProps) {
     if (!pendingInsert) return
     setIsInsertingRemaining(true)
     try {
-      await appendRows(pendingInsert.rows)
+      const duplicates = await appendRows(pendingInsert.rows)
+      if (duplicates.length) {
+        setSubmitError(t('duplicatePagesFound', { student: pendingInsert.values.student, pages: duplicates.join(', ') }))
+        const rows = pendingInsert.rows.filter(row => !duplicates.includes(row.page))
+        setPendingInsert(rows.length ? { ...pendingInsert, rows } : null)
+        return
+      }
       setSubmitError(null)
       finishSubmit(pendingInsert.rows, pendingInsert.values)
     } catch (err) {
